@@ -4,6 +4,63 @@
  */
 
 /**
+ * Options controlling how images are extracted from the DOCX archive.
+ */
+export interface ImageExtractionOptions {
+  /**
+   * The output directory where extracted images should be saved on disk.
+   * @default 'images'
+   */
+  outputDir?: string;
+
+  /**
+   * Whether image extraction is enabled.
+   * @default true
+   */
+  enabled?: boolean;
+}
+
+/**
+ * Represents an embedded image extracted from an OOXML Word document.
+ */
+export interface DocxImage {
+  /**
+   * The relationship ID referencing this image in the document relationships part (`word/_rels/document.xml.rels`).
+   */
+  relationshipId: string;
+
+  /**
+   * The relative target path from relationships (e.g. `'media/image1.png'`).
+   */
+  targetPath: string;
+
+  /**
+   * The full entry path within the .docx ZIP archive (e.g. `'word/media/image1.png'`).
+   */
+  zipPath: string;
+
+  /**
+   * The detected MIME type of the image (e.g. `'image/png'`).
+   */
+  mimeType?: string;
+
+  /**
+   * Descriptive alternative text extracted from `wp:docPr @descr` or `@title`.
+   */
+  altText?: string;
+
+  /**
+   * Width of the image in English Metric Units (EMUs), where 1 inch = 914,400 EMUs.
+   */
+  widthEmu?: number;
+
+  /**
+   * Height of the image in English Metric Units (EMUs), where 1 inch = 914,400 EMUs.
+   */
+  heightEmu?: number;
+}
+
+/**
  * Configuration options for DOCX parsing and text extraction.
  */
 export interface DocxParserOptions {
@@ -18,6 +75,11 @@ export interface DocxParserOptions {
    * @default true
    */
   preserveWhitespace?: boolean;
+
+  /**
+   * Image extraction configuration options.
+   */
+  images?: ImageExtractionOptions;
 }
 
 /**
@@ -38,6 +100,16 @@ export interface RawXmlContent {
    * The raw XML string of the numbering definitions part (`word/numbering.xml`), if present.
    */
   numberingXml?: string;
+
+  /**
+   * Map of relationship IDs to extracted DocxImage metadata.
+   */
+  imageMap?: Map<string, DocxImage>;
+
+  /**
+   * The raw JSZip archive instance, stored as unknown to decouple types from JSZip.
+   */
+  zipInstance?: unknown;
 }
 
 /**
@@ -129,6 +201,66 @@ export interface Paragraph {
    * List item numbering and nesting metadata, if this paragraph is part of a list.
    */
   listItem?: ListItemInfo;
+
+  /**
+   * Embedded images contained within this paragraph.
+   */
+  images?: DocxImage[];
+}
+
+/**
+ * Represents a single cell (`w:tc`) within a table row.
+ */
+export interface TableCell {
+  /**
+   * The list of paragraphs contained within this cell.
+   */
+  paragraphs: Paragraph[];
+
+  /**
+   * The number of grid columns spanned by this cell (`w:gridSpan`), if greater than 1.
+   */
+  columnSpan?: number;
+
+  /**
+   * Indicates whether this cell is vertically merged (`w:vMerge`).
+   */
+  isVerticalMerge?: boolean;
+}
+
+/**
+ * Represents a single row (`w:tr`) within a table.
+ */
+export interface TableRow {
+  /**
+   * The cells contained within this table row.
+   */
+  cells: TableCell[];
+
+  /**
+   * Indicates whether this row is a header row.
+   */
+  isHeader?: boolean;
+}
+
+/**
+ * Represents a structured table (`w:tbl`) within a Word document body.
+ */
+export interface DocxTable {
+  /**
+   * The rows contained within this table.
+   */
+  rows: TableRow[];
+
+  /**
+   * Total number of columns in the table grid.
+   */
+  columnCount: number;
+
+  /**
+   * The style identifier of the table (`w:tblPr > w:tblStyle @w:val`), if present.
+   */
+  style?: string;
 }
 
 /**
@@ -144,6 +276,11 @@ export interface DocxDocument {
    * The complete plain text of the entire document, with paragraphs joined by newlines.
    */
   text: string;
+
+  /**
+   * The list of tables extracted from the document body in order of appearance.
+   */
+  tables?: DocxTable[];
 }
 
 /**
@@ -167,6 +304,12 @@ export interface TypstConverterOptions {
    * @default false
    */
   includeHeader?: boolean;
+
+  /**
+   * Output directory for images in Typst `#image(...)` paths.
+   * @default 'images'
+   */
+  imageOutputDir?: string;
 }
 
 /**

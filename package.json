@@ -12,8 +12,12 @@
       "require": "./dist/index.cjs"
     }
   },
+  "bin": {
+    "docx2typst": "./dist/cli.js"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
+    "build:cli": "tsc -p tsconfig.build.json && node -e \"require('fs').chmodSync('dist/cli.js', '755')\"",
     "test": "jest --coverage",
     "lint": "eslint src"
   },

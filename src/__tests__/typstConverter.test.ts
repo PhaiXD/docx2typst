@@ -3,8 +3,12 @@
  * Unit tests for OOXML to Typst markup conversion layer.
  */
 
-import { convertDocxToTypst, getHeadingLevel } from '../converter/typstConverter.js';
-import type { DocxDocument, Paragraph } from '../types.js';
+import {
+  convertDocxToTypst,
+  convertTableToTypst,
+  getHeadingLevel,
+} from '../converter/typstConverter.js';
+import type { DocxDocument, DocxTable, Paragraph } from '../types.js';
 
 describe('typstConverter', () => {
   describe('getHeadingLevel', () => {
@@ -808,5 +812,393 @@ describe('typstConverter', () => {
       expect(result.content).toBe('Normal paragraph\n\n- List item');
     });
   });
+
+  describe('convertTableToTypst', () => {
+    it('should convert a 2x2 table to correct #table() syntax', () => {
+      const table: DocxTable = {
+        columnCount: 2,
+        rows: [
+          {
+            cells: [
+              { paragraphs: [{ text: 'Cell 1', runs: [{ text: 'Cell 1' }] }] },
+              { paragraphs: [{ text: 'Cell 2', runs: [{ text: 'Cell 2' }] }] },
+            ],
+          },
+          {
+            cells: [
+              { paragraphs: [{ text: 'Cell 3', runs: [{ text: 'Cell 3' }] }] },
+              { paragraphs: [{ text: 'Cell 4', runs: [{ text: 'Cell 4' }] }] },
+            ],
+          },
+        ],
+      };
+
+      const result = convertTableToTypst(table);
+      expect(result).toBe(
+        '#table(\n  columns: 2,\n  [Cell 1], [Cell 2],\n  [Cell 3], [Cell 4],\n)',
+      );
+    });
+
+    it('should format table with header row using table.header()', () => {
+      const table: DocxTable = {
+        columnCount: 2,
+        rows: [
+          {
+            isHeader: true,
+            cells: [
+              { paragraphs: [{ text: 'Header A', runs: [{ text: 'Header A' }] }] },
+              { paragraphs: [{ text: 'Header B', runs: [{ text: 'Header B' }] }] },
+            ],
+          },
+          {
+            cells: [
+              { paragraphs: [{ text: 'Cell 1', runs: [{ text: 'Cell 1' }] }] },
+              { paragraphs: [{ text: 'Cell 2', runs: [{ text: 'Cell 2' }] }] },
+            ],
+          },
+        ],
+      };
+
+      const result = convertTableToTypst(table);
+      expect(result).toBe(
+        '#table(\n  columns: 2,\n  table.header(\n    [Header A], [Header B],\n  ),\n  [Cell 1], [Cell 2],\n)',
+      );
+    });
+
+    it('should format table with no header using regular cell rows', () => {
+      const table: DocxTable = {
+        columnCount: 2,
+        rows: [
+          {
+            cells: [
+              { paragraphs: [{ text: 'Row 1 Col 1', runs: [{ text: 'Row 1 Col 1' }] }] },
+              { paragraphs: [{ text: 'Row 1 Col 2', runs: [{ text: 'Row 1 Col 2' }] }] },
+            ],
+          },
+          {
+            cells: [
+              { paragraphs: [{ text: 'Row 2 Col 1', runs: [{ text: 'Row 2 Col 1' }] }] },
+              { paragraphs: [{ text: 'Row 2 Col 2', runs: [{ text: 'Row 2 Col 2' }] }] },
+            ],
+          },
+        ],
+      };
+
+      const result = convertTableToTypst(table);
+      expect(result).toBe(
+        '#table(\n  columns: 2,\n  [Row 1 Col 1], [Row 1 Col 2],\n  [Row 2 Col 1], [Row 2 Col 2],\n)',
+      );
+    });
+
+    it('should convert cell with bold text using *bold* in output', () => {
+      const table: DocxTable = {
+        columnCount: 1,
+        rows: [
+          {
+            cells: [
+              {
+                paragraphs: [
+                  {
+                    text: 'Bold text',
+                    runs: [{ text: 'Bold text', bold: true }],
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      };
+
+      const result = convertTableToTypst(table);
+      expect(result).toBe('#table(\n  columns: 1,\n  [*Bold text*],\n)');
+    });
+
+    it('should produce [] for an empty cell', () => {
+      const table: DocxTable = {
+        columnCount: 2,
+        rows: [
+          {
+            cells: [
+              {
+                paragraphs: [],
+              },
+              {
+                paragraphs: [
+                  {
+                    text: '',
+                    runs: [],
+                    isEmpty: true,
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      };
+
+      const result = convertTableToTypst(table);
+      expect(result).toBe('#table(\n  columns: 2,\n  [], [],\n)');
+    });
+
+    it('should format single-row table (no header)', () => {
+      const table: DocxTable = {
+        columnCount: 2,
+        rows: [
+          {
+            cells: [
+              { paragraphs: [{ text: 'Item 1', runs: [{ text: 'Item 1' }] }] },
+              { paragraphs: [{ text: 'Item 2', runs: [{ text: 'Item 2' }] }] },
+            ],
+          },
+        ],
+      };
+
+      const result = convertTableToTypst(table);
+      expect(result).toBe('#table(\n  columns: 2,\n  [Item 1], [Item 2],\n)');
+    });
+
+    it('should format cell with multiple paragraphs joined with newline', () => {
+      const table: DocxTable = {
+        columnCount: 1,
+        rows: [
+          {
+            cells: [
+              {
+                paragraphs: [
+                  { text: 'Line 1', runs: [{ text: 'Line 1' }] },
+                  { text: 'Line 2', runs: [{ text: 'Line 2' }] },
+                ],
+              },
+            ],
+          },
+        ],
+      };
+
+      const result = convertTableToTypst(table);
+      expect(result).toBe('#table(\n  columns: 1,\n  [Line 1\nLine 2],\n)');
+    });
+
+    it('should append tables at end of document in convertDocxToTypst', () => {
+      const doc: DocxDocument = {
+        paragraphs: [
+          {
+            text: 'Intro paragraph',
+            runs: [{ text: 'Intro paragraph' }],
+          },
+        ],
+        text: 'Intro paragraph',
+        tables: [
+          {
+            columnCount: 2,
+            rows: [
+              {
+                cells: [
+                  { paragraphs: [{ text: 'A', runs: [{ text: 'A' }] }] },
+                  { paragraphs: [{ text: 'B', runs: [{ text: 'B' }] }] },
+                ],
+              },
+            ],
+          },
+        ],
+      };
+
+      const result = convertDocxToTypst(doc);
+      expect(result.content).toBe(
+        'Intro paragraph\n\n#table(\n  columns: 2,\n  [A], [B],\n)',
+      );
+    });
+
+    it('should convert document containing only tables and no paragraphs', () => {
+      const doc: DocxDocument = {
+        paragraphs: [],
+        text: '',
+        tables: [
+          {
+            columnCount: 1,
+            rows: [
+              {
+                cells: [
+                  { paragraphs: [{ text: 'Solo cell', runs: [{ text: 'Solo cell' }] }] },
+                ],
+              },
+            ],
+          },
+        ],
+      };
+
+      const result = convertDocxToTypst(doc);
+      expect(result.content).toBe('#table(\n  columns: 1,\n  [Solo cell],\n)');
+    });
+  });
+
+  describe('convertDocxToTypst - images', () => {
+    it('should produce #image("images/image1.png") for paragraph with image', () => {
+      const doc: DocxDocument = {
+        paragraphs: [
+          {
+            text: '',
+            runs: [],
+            images: [
+              {
+                relationshipId: 'rId1',
+                targetPath: 'media/image1.png',
+                zipPath: 'word/media/image1.png',
+                mimeType: 'image/png',
+              },
+            ],
+          },
+        ],
+        text: '',
+      };
+
+      const result = convertDocxToTypst(doc);
+      expect(result.content).toBe('#image("images/image1.png")');
+    });
+
+    it('should produce #image("images/image1.png", width: 50%) for image with widthEmu', () => {
+      // 5486400 * 0.5 = 2743200 EMUs
+      const doc: DocxDocument = {
+        paragraphs: [
+          {
+            text: '',
+            runs: [],
+            images: [
+              {
+                relationshipId: 'rId1',
+                targetPath: 'media/image1.png',
+                zipPath: 'word/media/image1.png',
+                widthEmu: 2743200,
+              },
+            ],
+          },
+        ],
+        text: '',
+      };
+
+      const result = convertDocxToTypst(doc);
+      expect(result.content).toBe('#image("images/image1.png", width: 50%)');
+    });
+
+    it('should use custom imageOutputDir option when provided', () => {
+      const doc: DocxDocument = {
+        paragraphs: [
+          {
+            text: '',
+            runs: [],
+            images: [
+              {
+                relationshipId: 'rId1',
+                targetPath: 'media/image1.png',
+                zipPath: 'word/media/image1.png',
+              },
+            ],
+          },
+        ],
+        text: '',
+      };
+
+      const result = convertDocxToTypst(doc, { imageOutputDir: 'custom_images' });
+      expect(result.content).toBe('#image("custom_images/image1.png")');
+    });
+
+    it('should cap width percentage at 100% when width > page width', () => {
+      // 6000000 > 5486400
+      const doc: DocxDocument = {
+        paragraphs: [
+          {
+            text: '',
+            runs: [],
+            images: [
+              {
+                relationshipId: 'rId1',
+                targetPath: 'media/image1.png',
+                zipPath: 'word/media/image1.png',
+                widthEmu: 6000000,
+              },
+            ],
+          },
+        ],
+        text: '',
+      };
+
+      const result = convertDocxToTypst(doc);
+      expect(result.content).toBe('#image("images/image1.png", width: 100%)');
+    });
+
+    it('should append image markup on new line when paragraph has text', () => {
+      const doc: DocxDocument = {
+        paragraphs: [
+          {
+            text: 'Diagram caption',
+            runs: [{ text: 'Diagram caption' }],
+            images: [
+              {
+                relationshipId: 'rId1',
+                targetPath: 'media/diagram.png',
+                zipPath: 'word/media/diagram.png',
+              },
+            ],
+          },
+        ],
+        text: 'Diagram caption',
+      };
+
+      const result = convertDocxToTypst(doc);
+      expect(result.content).toBe('Diagram caption\n#image("images/diagram.png")');
+    });
+
+    it('should emit multiple images on separate lines', () => {
+      const doc: DocxDocument = {
+        paragraphs: [
+          {
+            text: '',
+            runs: [],
+            images: [
+              {
+                relationshipId: 'rId1',
+                targetPath: 'media/img1.png',
+                zipPath: 'word/media/img1.png',
+              },
+              {
+                relationshipId: 'rId2',
+                targetPath: 'media/img2.png',
+                zipPath: 'word/media/img2.png',
+                widthEmu: 1371600,
+              },
+            ],
+          },
+        ],
+        text: '',
+      };
+
+      const result = convertDocxToTypst(doc);
+      expect(result.content).toBe(
+        '#image("images/img1.png")\n#image("images/img2.png", width: 25%)',
+      );
+    });
+
+    it('should handle custom imageOutputDir with trailing slash', () => {
+      const doc: DocxDocument = {
+        paragraphs: [
+          {
+            text: '',
+            runs: [],
+            images: [
+              {
+                relationshipId: 'rId1',
+                targetPath: 'media/image1.png',
+                zipPath: 'word/media/image1.png',
+              },
+            ],
+          },
+        ],
+        text: '',
+      };
+
+      const result = convertDocxToTypst(doc, { imageOutputDir: 'my_images/' });
+      expect(result.content).toBe('#image("my_images/image1.png")');
+    });
+  });
 });
+
 

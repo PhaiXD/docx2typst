@@ -3,7 +3,7 @@
  * Unit tests for text extraction from OOXML markup.
  */
 
-import { extractText, resolveListItems } from '../extractor/textExtractor.js';
+import { extractParagraph, extractText, resolveListItems } from '../extractor/textExtractor.js';
 import { DocxParseError } from '../errors.js';
 import type { AbstractNumMap, DocxDocument, NumIdMap } from '../types.js';
 
@@ -505,4 +505,132 @@ describe('textExtractor', () => {
       expect(resolved.paragraphs[0].listItem?.listType).toBe('bullet');
     });
   });
+
+  describe('extractParagraph export and table integration in extractText', () => {
+    it('should directly extract paragraph with extractParagraph', () => {
+      const pNode = {
+        'w:r': {
+          'w:t': 'Directly extracted',
+        },
+      };
+      const para = extractParagraph(pNode);
+      expect(para.text).toBe('Directly extracted');
+      expect(para.runs).toHaveLength(1);
+    });
+
+    it('should extract tables alongside paragraphs in extractText', () => {
+      const xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+      <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+        <w:body>
+          <w:p>
+            <w:r><w:t>Paragraph before table</w:t></w:r>
+          </w:p>
+          <w:tbl>
+            <w:tr>
+              <w:tc>
+                <w:p><w:r><w:t>Cell 1</w:t></w:r></w:p>
+              </w:tc>
+            </w:tr>
+          </w:tbl>
+        </w:body>
+      </w:document>`;
+
+      const doc = extractText(xml);
+      expect(doc.paragraphs).toHaveLength(1);
+      expect(doc.text).toBe('Paragraph before table');
+      expect(doc.tables).toBeDefined();
+      expect(doc.tables).toHaveLength(1);
+      expect(doc.tables?.[0].rows[0].cells[0].paragraphs[0].text).toBe('Cell 1');
+    });
+
+    it('should extract images into paragraph when imageMap is provided to extractText', () => {
+      const xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+      <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+                  xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"
+                  xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+                  xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"
+                  xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+        <w:body>
+          <w:p>
+            <w:r>
+              <w:t>Caption</w:t>
+              <w:drawing>
+                <wp:inline>
+                  <wp:extent cx="2743200" cy="1828800"/>
+                  <wp:docPr descr="Test image"/>
+                  <a:graphic>
+                    <a:graphicData>
+                      <pic:pic>
+                        <pic:blipFill>
+                          <a:blip r:embed="rId1"/>
+                        </pic:blipFill>
+                      </pic:pic>
+                    </a:graphicData>
+                  </a:graphic>
+                </wp:inline>
+              </w:drawing>
+            </w:r>
+          </w:p>
+        </w:body>
+      </w:document>`;
+
+      const imageMap = new Map([
+        [
+          'rId1',
+          {
+            relationshipId: 'rId1',
+            targetPath: 'media/image1.png',
+            zipPath: 'word/media/image1.png',
+            mimeType: 'image/png',
+          },
+        ],
+      ]);
+
+      const doc = extractText(xml, undefined, imageMap);
+      expect(doc.paragraphs[0].images).toBeDefined();
+      expect(doc.paragraphs[0].images).toHaveLength(1);
+      expect(doc.paragraphs[0].images?.[0].relationshipId).toBe('rId1');
+      expect(doc.paragraphs[0].images?.[0].widthEmu).toBe(2743200);
+      expect(doc.paragraphs[0].images?.[0].altText).toBe('Test image');
+      expect(doc.paragraphs[0].isEmpty).toBeUndefined();
+    });
+
+    it('should mark paragraph as not empty when it has image but no text', () => {
+      const pNode = {
+        'w:r': {
+          'w:drawing': {
+            'wp:inline': {
+              'wp:extent': { '@_cx': 1000, '@_cy': 2000 },
+              'a:graphic': {
+                'a:graphicData': {
+                  'pic:pic': {
+                    'pic:blipFill': {
+                      'a:blip': { '@_r:embed': 'rId1' },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      };
+
+      const imageMap = new Map([
+        [
+          'rId1',
+          {
+            relationshipId: 'rId1',
+            targetPath: 'media/image1.png',
+            zipPath: 'word/media/image1.png',
+          },
+        ],
+      ]);
+
+      const para = extractParagraph(pNode, undefined, imageMap);
+      expect(para.isEmpty).toBeUndefined();
+      expect(para.images).toHaveLength(1);
+      expect(para.text).toBe('');
+    });
+  });
 });
+

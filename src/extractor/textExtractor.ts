@@ -4,9 +4,12 @@
  */
 
 import { parseXml } from '../utils/xmlParser.js';
+import { extractTables } from './tableExtractor.js';
+import { extractImageMetadata } from './imageExtractor.js';
 import type {
   AbstractNumMap,
   DocxDocument,
+  DocxImage,
   DocxParserOptions,
   ListItemInfo,
   NumIdMap,
@@ -146,11 +149,18 @@ function extractTextFromTNode(tNode: unknown): string {
 
 /**
  * Extracts a single TextRun from a parsed w:r node.
+ * If images are present in w:drawing and imageMap is provided, extracts DocxImage metadata.
  *
  * @param rNode - Parsed w:r node.
+ * @param imageMap - Optional mapping of relationship IDs to DocxImage objects.
+ * @param paragraphImages - Optional array accumulating images in the paragraph.
  * @returns Extracted TextRun, or null if no valid run could be parsed.
  */
-function extractRun(rNode: unknown): TextRun | null {
+function extractRun(
+  rNode: unknown,
+  imageMap?: Map<string, DocxImage>,
+  paragraphImages?: DocxImage[],
+): TextRun | null {
   if (!isRecord(rNode)) {
     return null;
   }
@@ -195,6 +205,15 @@ function extractRun(rNode: unknown): TextRun | null {
     text += '\n';
   }
 
+  // Check for w:drawing in the run node
+  const drawingNode = getProperty(rNode, 'w:drawing', 'drawing');
+  if (drawingNode !== undefined && imageMap && paragraphImages && isRecord(rNode)) {
+    const images = extractImageMetadata(rNode, imageMap);
+    if (images.length > 0) {
+      paragraphImages.push(...images);
+    }
+  }
+
   // Return run even if text is empty, as long as it was a valid run element
   const run: TextRun = {
     text,
@@ -211,15 +230,21 @@ function extractRun(rNode: unknown): TextRun | null {
  * including runs nested inside hyperlinks (w:hyperlink).
  *
  * @param container - Parsed paragraph or child container node.
+ * @param imageMap - Optional mapping of relationship IDs to DocxImage objects.
+ * @param paragraphImages - Optional array accumulating images in the paragraph.
  * @returns Array of parsed TextRun objects.
  */
-function extractRunsFromContainer(container: Record<string, unknown>): TextRun[] {
+function extractRunsFromContainer(
+  container: Record<string, unknown>,
+  imageMap?: Map<string, DocxImage>,
+  paragraphImages?: DocxImage[],
+): TextRun[] {
   const runs: TextRun[] = [];
 
   // Direct runs (w:r)
   const directRuns = toArray(getProperty(container, 'w:r', 'r'));
   for (const rNode of directRuns) {
-    const run = extractRun(rNode);
+    const run = extractRun(rNode, imageMap, paragraphImages);
     if (run !== null) {
       runs.push(run);
     }
@@ -231,7 +256,7 @@ function extractRunsFromContainer(container: Record<string, unknown>): TextRun[]
   );
   for (const hyperlink of hyperlinks) {
     if (isRecord(hyperlink)) {
-      runs.push(...extractRunsFromContainer(hyperlink));
+      runs.push(...extractRunsFromContainer(hyperlink, imageMap, paragraphImages));
     }
   }
 
@@ -243,9 +268,14 @@ function extractRunsFromContainer(container: Record<string, unknown>): TextRun[]
  *
  * @param pNode - Parsed w:p XML node.
  * @param options - Parser options.
+ * @param imageMap - Optional mapping of relationship IDs to DocxImage objects.
  * @returns Extracted Paragraph.
  */
-function extractParagraph(pNode: unknown, options?: DocxParserOptions): Paragraph {
+export function extractParagraph(
+  pNode: unknown,
+  options?: DocxParserOptions,
+  imageMap?: Map<string, DocxImage>,
+): Paragraph {
   if (!isRecord(pNode)) {
     return {
       text: '',
@@ -324,9 +354,10 @@ function extractParagraph(pNode: unknown, options?: DocxParserOptions): Paragrap
     }
   }
 
-  const runs = extractRunsFromContainer(pNode);
+  const paragraphImages: DocxImage[] = [];
+  const runs = extractRunsFromContainer(pNode, imageMap, paragraphImages);
   const text = runs.map((r) => r.text).join('');
-  const isEmpty = runs.length === 0 || text.length === 0;
+  const isEmpty = (runs.length === 0 || text.length === 0) && paragraphImages.length === 0;
 
   return {
     text,
@@ -334,6 +365,7 @@ function extractParagraph(pNode: unknown, options?: DocxParserOptions): Paragrap
     ...(style !== undefined ? { style } : {}),
     ...(isEmpty ? { isEmpty: true } : {}),
     ...(listItem !== undefined ? { listItem } : {}),
+    ...(paragraphImages.length > 0 ? { images: paragraphImages } : {}),
   };
 }
 
@@ -342,14 +374,19 @@ function extractParagraph(pNode: unknown, options?: DocxParserOptions): Paragrap
  *
  * Navigates the OOXML hierarchy: `w:document` -> `w:body` -> `w:p` -> `w:r` -> `w:t`.
  * Handles formatting indicators (`w:b`, `w:i`, `w:u`), paragraph styles (`w:pStyle`),
- * empty paragraphs, and whitespace preservation.
+ * empty paragraphs, whitespace preservation, and images.
  *
  * @param rawXml - Raw XML string from `word/document.xml`.
  * @param options - Optional parser configuration.
+ * @param imageMap - Optional mapping of relationship IDs to DocxImage objects.
  * @returns The structured DocxDocument containing paragraphs and plain text.
  * @throws {DocxParseError} If the XML is malformed or cannot be parsed.
  */
-export function extractText(rawXml: string, options?: DocxParserOptions): DocxDocument {
+export function extractText(
+  rawXml: string,
+  options?: DocxParserOptions,
+  imageMap?: Map<string, DocxImage>,
+): DocxDocument {
   const parsed = parseXml(rawXml);
 
   // Navigate to root document element
@@ -362,13 +399,19 @@ export function extractText(rawXml: string, options?: DocxParserOptions): DocxDo
 
   // Extract paragraphs (w:p)
   const pNodes = toArray(getProperty(bodyObj, 'w:p', 'p'));
-  const paragraphs: Paragraph[] = pNodes.map((pNode) => extractParagraph(pNode, options));
+  const paragraphs: Paragraph[] = pNodes.map((pNode) =>
+    extractParagraph(pNode, options, imageMap),
+  );
 
   const text = paragraphs.map((p) => p.text).join('\n');
+
+  // Extract tables (w:tbl)
+  const tables = isRecord(bodyObj) ? extractTables(bodyObj) : [];
 
   return {
     paragraphs,
     text,
+    tables,
   };
 }
 

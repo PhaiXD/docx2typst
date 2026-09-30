@@ -19,6 +19,11 @@ import {
   extractText,
   extractNumberingMaps,
   resolveListItems,
+  extractTables,
+  convertTableToTypst,
+  findImagesInRun,
+  extractImageMetadata,
+  saveImages,
 } from '../index.js';
 
 describe('index and high-level API', () => {
@@ -123,6 +128,11 @@ describe('index and high-level API', () => {
     expect(typeof extractNumberingMaps).toBe('function');
     expect(typeof resolveListItems).toBe('function');
     expect(typeof parseXml).toBe('function');
+    expect(typeof extractTables).toBe('function');
+    expect(typeof convertTableToTypst).toBe('function');
+    expect(typeof findImagesInRun).toBe('function');
+    expect(typeof extractImageMetadata).toBe('function');
+    expect(typeof saveImages).toBe('function');
     expect(DocxReadError).toBeDefined();
     expect(DocxParseError).toBeDefined();
   });

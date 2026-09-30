@@ -3,9 +3,13 @@
  * Converts structured DocxDocument content into Typst markup format.
  */
 
+import { basename } from 'node:path';
 import type {
   DocxDocument,
+  DocxImage,
+  DocxTable,
   Paragraph,
+  TableCell,
   TextRun,
   TypstConverterOptions,
   TypstDocument,
@@ -105,6 +109,34 @@ function convertRunToTypst(run: TextRun, escape: boolean = true): string {
 }
 
 /**
+ * Converts a DocxImage into Typst `#image(...)` markup.
+ *
+ * Emits `#image("path/to/image.png")` or `#image("path/to/image.png", width: XX%)`.
+ * Width is calculated as a percentage of page width assuming 6 inches = 5,486,400 EMUs,
+ * rounded to the nearest integer percent and capped at 100%.
+ *
+ * @param image - The DocxImage to convert.
+ * @param options - Optional Typst converter options.
+ * @returns Converted Typst image markup string.
+ */
+function convertImageToTypst(
+  image: DocxImage,
+  options?: TypstConverterOptions,
+): string {
+  const outputDir = options?.imageOutputDir ?? 'images';
+  const cleanOutputDir = outputDir.replace(/[/\\]+$/, '');
+  const filename = basename(image.zipPath.replace(/\\/g, '/'));
+  const path = cleanOutputDir.length > 0 ? `${cleanOutputDir}/${filename}` : filename;
+
+  if (image.widthEmu !== undefined) {
+    const widthPct = Math.min(100, Math.round((image.widthEmu / 5486400) * 100));
+    return `#image("${path}", width: ${widthPct}%)`;
+  }
+
+  return `#image("${path}")`;
+}
+
+/**
  * Converts a Paragraph into Typst markup.
  *
  * @param para - The paragraph to convert.
@@ -115,11 +147,13 @@ function convertParagraphToTypst(
   para: Paragraph,
   options?: TypstConverterOptions,
 ): string {
-  if (para.isEmpty) {
+  const hasImages = Array.isArray(para.images) && para.images.length > 0;
+  if (para.isEmpty && !hasImages) {
     return '';
   }
 
   const escape = options?.escapeSpecialChars !== false;
+  let textContent = '';
 
   if (para.listItem !== undefined) {
     const runs =
@@ -132,39 +166,131 @@ function convertParagraphToTypst(
     const content = runs.map((run) => convertRunToTypst(run, escape)).join('');
     const indent = '  '.repeat(para.listItem.level);
     const bullet = para.listItem.listType === 'bullet' ? '-' : '+';
-    return `${indent}${bullet} ${content.trim()}`;
+    textContent = `${indent}${bullet} ${content.trim()}`;
+  } else {
+    const headingLevel = getHeadingLevel(para.style);
+    if (headingLevel !== null) {
+      // Heading: unformatted text with level-specific '=' prefix
+      const rawHeadingText =
+        para.runs && para.runs.length > 0
+          ? para.runs.map((r) => r.text).join('')
+          : para.text || '';
+
+      const text = escape ? escapeTypstText(rawHeadingText) : rawHeadingText;
+      const trimmed = text.trim();
+      const marker = '='.repeat(headingLevel);
+
+      textContent = trimmed.length > 0 ? `${marker} ${trimmed}` : `${marker} `;
+    } else {
+      // Normal paragraph: format individual runs and handle whitespace
+      const runs =
+        para.runs && para.runs.length > 0
+          ? para.runs
+          : para.text
+            ? [{ text: para.text }]
+            : [];
+
+      if (runs.length > 0) {
+        const content = runs.map((run) => convertRunToTypst(run, escape)).join('');
+        textContent = content.trim();
+      }
+    }
   }
 
-  const headingLevel = getHeadingLevel(para.style);
+  if (hasImages) {
+    const imageMarkups = para.images!.map((img) => convertImageToTypst(img, options));
+    if (textContent.length > 0) {
+      return [textContent, ...imageMarkups].join('\n');
+    }
+    return imageMarkups.join('\n');
+  }
 
-  if (headingLevel !== null) {
-    // Heading: unformatted text with level-specific '=' prefix
-    const rawHeadingText =
+  return textContent;
+}
+
+/**
+ * Converts a TableCell into Typst content wrapped in square brackets `[...]`.
+ *
+ * Joins all paragraphs within the cell, converting individual runs with formatting,
+ * and separating paragraphs with newline characters. Empty cells produce `[]`.
+ *
+ * @param cell - The table cell to convert.
+ * @param options - Optional Typst converter configuration.
+ * @returns Converted Typst cell markup string.
+ */
+function convertCellToTypst(cell: TableCell, options?: TypstConverterOptions): string {
+  if (!cell.paragraphs || cell.paragraphs.length === 0) {
+    return '[]';
+  }
+
+  const escape = options?.escapeSpecialChars !== false;
+  const paraTexts: string[] = [];
+
+  for (const para of cell.paragraphs) {
+    if (para.isEmpty) {
+      continue;
+    }
+    const runs =
       para.runs && para.runs.length > 0
-        ? para.runs.map((r) => r.text).join('')
-        : para.text || '';
+        ? para.runs
+        : para.text
+          ? [{ text: para.text }]
+          : [];
 
-    const text = escape ? escapeTypstText(rawHeadingText) : rawHeadingText;
-    const trimmed = text.trim();
-    const marker = '='.repeat(headingLevel);
-
-    return trimmed.length > 0 ? `${marker} ${trimmed}` : `${marker} `;
+    const paraContent = runs.map((run) => convertRunToTypst(run, escape)).join('').trim();
+    if (paraContent.length > 0) {
+      paraTexts.push(paraContent);
+    }
   }
 
-  // Normal paragraph: format individual runs and handle whitespace
-  const runs =
-    para.runs && para.runs.length > 0
-      ? para.runs
-      : para.text
-        ? [{ text: para.text }]
-        : [];
-
-  if (runs.length === 0) {
-    return '';
+  if (paraTexts.length === 0) {
+    return '[]';
   }
 
-  const content = runs.map((run) => convertRunToTypst(run, escape)).join('');
-  return content.trim();
+  return `[${paraTexts.join('\n')}]`;
+}
+
+/**
+ * Converts a structured DocxTable into Typst `#table(...)` markup.
+ *
+ * Formats table columns, emits `table.header(...)` blocks for header rows,
+ * and formats all cell content with indentation and comma delimiters.
+ *
+ * @param table - The table structure to convert.
+ * @param options - Optional Typst converter options.
+ * @returns Converted Typst table markup string.
+ *
+ * @example
+ * ```typescript
+ * const typstTable = convertTableToTypst(table);
+ * console.log(typstTable);
+ * ```
+ */
+export function convertTableToTypst(
+  table: DocxTable,
+  options?: TypstConverterOptions,
+): string {
+  const lines: string[] = [
+    '#table(',
+    `  columns: ${table.columnCount},`,
+  ];
+
+  for (const row of table.rows) {
+    const cellsContent = row.cells
+      .map((cell) => convertCellToTypst(cell, options))
+      .join(', ');
+
+    if (row.isHeader) {
+      lines.push('  table.header(');
+      lines.push(`    ${cellsContent},`);
+      lines.push('  ),');
+    } else {
+      lines.push(`  ${cellsContent},`);
+    }
+  }
+
+  lines.push(')');
+  return lines.join('\n');
 }
 
 /**
@@ -234,6 +360,17 @@ export function convertDocxToTypst(
       }
     }
     content += convertedParagraphs[i];
+  }
+
+  if (doc.tables && doc.tables.length > 0) {
+    for (const table of doc.tables) {
+      const tableTypst = convertTableToTypst(table, options);
+      if (content.length > 0) {
+        content += '\n\n' + tableTypst;
+      } else {
+        content = tableTypst;
+      }
+    }
   }
 
   if (options?.includeHeader) {

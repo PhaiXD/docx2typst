@@ -17,6 +17,8 @@ import type {
 // Re-export all type definitions
 export type {
   DocxParserOptions,
+  ImageExtractionOptions,
+  DocxImage,
   RawXmlContent,
   TextRun,
   Paragraph,
@@ -26,6 +28,9 @@ export type {
   ListItemInfo,
   NumIdMap,
   AbstractNumMap,
+  TableCell,
+  TableRow,
+  DocxTable,
 } from './types.js';
 
 // Re-export all custom error classes
@@ -36,7 +41,17 @@ export { parseXml } from './utils/xmlParser.js';
 export { readDocxFile } from './reader.js';
 export { extractText, resolveListItems } from './extractor/textExtractor.js';
 export { extractNumberingMaps } from './extractor/numberingExtractor.js';
-export { convertDocxToTypst, getHeadingLevel } from './converter/typstConverter.js';
+export { extractTables } from './extractor/tableExtractor.js';
+export {
+  findImagesInRun,
+  extractImageMetadata,
+  saveImages,
+} from './extractor/imageExtractor.js';
+export {
+  convertDocxToTypst,
+  convertTableToTypst,
+  getHeadingLevel,
+} from './converter/typstConverter.js';
 
 /**
  * Convenience function to load a .docx file from disk and convert its contents directly
@@ -48,12 +63,31 @@ export { convertDocxToTypst, getHeadingLevel } from './converter/typstConverter.
  * @throws {DocxReadError} If reading or opening the .docx archive fails.
  * @throws {DocxParseError} If the document XML content is malformed.
  *
- * @example
+ * @example Basic plain text extraction:
  * ```typescript
  * import { convertDocxToText } from 'docx2typst';
  *
- * const text = await convertDocxToText('./document.docx');
- * console.log(text);
+ * const text = await convertDocxToText('./notes.docx');
+ * console.log('Document text:\n', text);
+ * ```
+ *
+ * @example Error handling and whitespace options:
+ * ```typescript
+ * import { convertDocxToText, DocxReadError, DocxParseError } from 'docx2typst';
+ *
+ * try {
+ *   const plainText = await convertDocxToText('./report.docx', {
+ *     preserveWhitespace: true,
+ *     includeStyles: false,
+ *   });
+ *   console.log(plainText);
+ * } catch (error) {
+ *   if (error instanceof DocxReadError) {
+ *     console.error('Failed to read DOCX package:', error.message);
+ *   } else if (error instanceof DocxParseError) {
+ *     console.error('Invalid document XML structure:', error.message);
+ *   }
+ * }
  * ```
  */
 export async function convertDocxToText(
@@ -61,7 +95,7 @@ export async function convertDocxToText(
   options?: DocxParserOptions,
 ): Promise<string> {
   const rawContent = await readDocxFile(filePath);
-  let document = extractText(rawContent.documentXml, options);
+  let document = extractText(rawContent.documentXml, options, rawContent.imageMap);
   if (rawContent.numberingXml) {
     const { numIdMap, abstractNumMap } = extractNumberingMaps(rawContent.numberingXml);
     document = resolveListItems(document, numIdMap, abstractNumMap);
@@ -79,13 +113,28 @@ export async function convertDocxToText(
  * @throws {DocxReadError} If reading or opening the .docx archive fails.
  * @throws {DocxParseError} If the document XML content is malformed.
  *
- * @example
+ * @example Converting a DOCX file and writing Typst output to disk:
+ * ```typescript
+ * import { writeFile } from 'node:fs/promises';
+ * import { convertDocxFile } from 'docx2typst';
+ *
+ * const typstDoc = await convertDocxFile('./document.docx');
+ * await writeFile('./document.typ', typstDoc.content, 'utf-8');
+ * console.log(`Converted ${typstDoc.stats.paragraphCount} paragraphs and ${typstDoc.stats.headingCount} headings.`);
+ * ```
+ *
+ * @example Custom configuration with image directory and header comments:
  * ```typescript
  * import { convertDocxFile } from 'docx2typst';
  *
- * const typstDoc = await convertDocxFile('./document.docx', { includeHeader: true });
+ * const typstDoc = await convertDocxFile('./document.docx', {
+ *   includeHeader: true,
+ *   imageOutputDir: 'assets/images',
+ *   escapeSpecialChars: true,
+ *   paragraphSpacing: true,
+ * });
  * console.log(typstDoc.content);
- * console.log(typstDoc.stats);
+ * console.log('Conversion statistics:', typstDoc.stats);
  * ```
  */
 export async function convertDocxFile(
@@ -93,10 +142,11 @@ export async function convertDocxFile(
   options?: TypstConverterOptions,
 ): Promise<TypstDocument> {
   const rawContent = await readDocxFile(filePath);
-  let document = extractText(rawContent.documentXml);
+  let document = extractText(rawContent.documentXml, undefined, rawContent.imageMap);
   if (rawContent.numberingXml) {
     const { numIdMap, abstractNumMap } = extractNumberingMaps(rawContent.numberingXml);
     document = resolveListItems(document, numIdMap, abstractNumMap);
   }
   return convertDocxToTypst(document, options);
 }
+
