@@ -562,4 +562,230 @@ describe('Critical Bug Fixes Verification', () => {
       expect(result).toContain('Image caption');
     });
   });
+
+  // ==============================================================
+  // REAL-WORLD FIXES (test.docx issues)
+  // ==============================================================
+  describe('BUG 1 & 6: Tables not wrapped in #columns() and conservative column detection', () => {
+    it('should NOT wrap sections containing tables in #columns()', () => {
+      const doc: DocxDocument = {
+        paragraphs: [
+          { text: 'Table Caption', runs: [{ text: 'Table Caption' }] },
+          { text: 'After Table Note', runs: [{ text: 'After Table Note' }] },
+        ],
+        tables: [
+          {
+            columnCount: 2,
+            rows: [
+              {
+                cells: [
+                  { paragraphs: [{ text: 'Cell A', runs: [{ text: 'Cell A' }] }] },
+                  { paragraphs: [{ text: 'Cell B', runs: [{ text: 'Cell B' }] }] },
+                ],
+              },
+            ],
+          },
+        ],
+        bodyItems: [
+          {
+            type: 'paragraph',
+            paragraph: { text: 'Table Caption', runs: [{ text: 'Table Caption' }] },
+          },
+          {
+            type: 'table',
+            table: {
+              columnCount: 2,
+              rows: [
+                {
+                  cells: [
+                    { paragraphs: [{ text: 'Cell A', runs: [{ text: 'Cell A' }] }] },
+                    { paragraphs: [{ text: 'Cell B', runs: [{ text: 'Cell B' }] }] },
+                  ],
+                },
+              ],
+            },
+          },
+          {
+            type: 'paragraph',
+            paragraph: { text: 'After Table Note', runs: [{ text: 'After Table Note' }] },
+          },
+        ],
+        sections: [{ columnCount: 2 }],
+        text: 'Table Caption\nAfter Table Note',
+      };
+
+      const result = convertDocxToTypst(doc);
+      expect(result.content).not.toContain('#columns(');
+      expect(result.content).toContain('#table(');
+    });
+
+    it('should wrap sections in #columns(N) when section contains ONLY paragraphs with content', () => {
+      const doc: DocxDocument = {
+        paragraphs: [
+          { text: 'Multi-column paragraph 1', runs: [{ text: 'Multi-column paragraph 1' }] },
+          { text: 'Multi-column paragraph 2', runs: [{ text: 'Multi-column paragraph 2' }] },
+        ],
+        bodyItems: [
+          {
+            type: 'paragraph',
+            paragraph: { text: 'Multi-column paragraph 1', runs: [{ text: 'Multi-column paragraph 1' }] },
+          },
+          {
+            type: 'paragraph',
+            paragraph: { text: 'Multi-column paragraph 2', runs: [{ text: 'Multi-column paragraph 2' }] },
+          },
+        ],
+        sections: [{ columnCount: 2 }],
+        text: 'Multi-column paragraph 1\nMulti-column paragraph 2',
+      };
+
+      const result = convertDocxToTypst(doc);
+      expect(result.content).toContain('#columns(2)[');
+      expect(result.content).toContain('Multi-column paragraph 1');
+    });
+
+    it('should not wrap in #columns(N) when section contains only blank paragraphs', () => {
+      const doc: DocxDocument = {
+        paragraphs: [
+          { text: '', runs: [], isEmpty: true },
+          { text: '', runs: [], isEmpty: true },
+        ],
+        bodyItems: [
+          { type: 'paragraph', paragraph: { text: '', runs: [], isEmpty: true } },
+          { type: 'paragraph', paragraph: { text: '', runs: [], isEmpty: true } },
+        ],
+        sections: [{ columnCount: 2 }],
+        text: '',
+      };
+
+      const result = convertDocxToTypst(doc);
+      expect(result.content).not.toContain('#columns');
+    });
+  });
+
+  describe('BUG 2: Row cell slot overflow guard and phantom cell filtering', () => {
+    it('should skip trailing overflow cells in convertTableToTypst when slotsUsed >= columnCount', () => {
+      const table: DocxTable = {
+        columnCount: 4,
+        rows: [
+          {
+            cells: [
+              { paragraphs: [] },
+              {
+                columnSpan: 2,
+                paragraphs: [{ text: 'Anemia', runs: [{ text: 'Anemia' }] }],
+              },
+              { paragraphs: [] },
+              { paragraphs: [] }, // 5th slot, should be skipped
+            ],
+          },
+        ],
+      };
+
+      const result = convertTableToTypst(table);
+      expect(result).toBe(
+        '#table(\n  columns: 4,\n  stroke: 1pt,\n  [], table.cell(colspan: 2)[Anemia], [],\n)',
+      );
+    });
+
+    it('should drop trailing empty phantom cells that exceed columnCount in extractTables', () => {
+      const xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>
+    <w:tbl>
+      <w:tr>
+        <w:tc><w:p><w:r><w:t>Col 1</w:t></w:r></w:p></w:tc>
+        <w:tc><w:p><w:r><w:t>Col 2</w:t></w:r></w:p></w:tc>
+      </w:tr>
+      <w:tr>
+        <w:tc><w:p><w:r><w:t>Val 1</w:t></w:r></w:p></w:tc>
+        <w:tc><w:p><w:r><w:t>Val 2</w:t></w:r></w:p></w:tc>
+        <w:tc><w:tcPr><w:vMerge/></w:tcPr><w:p/></w:tc>
+      </w:tr>
+    </w:tbl>
+  </w:body>
+</w:document>`;
+
+      const doc = extractText(xml);
+      expect(doc.tables).toBeDefined();
+      expect(doc.tables![0].columnCount).toBe(2);
+      expect(doc.tables![0].rows[1].cells).toHaveLength(2);
+    });
+  });
+
+  describe('BUG 3: Spacer column detection and removal', () => {
+    it('should detect all-empty column across rows, remove spacer cells and decrement columnCount', () => {
+      const xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>
+    <w:tbl>
+      <w:tr>
+        <w:tc><w:p><w:r><w:t>Left</w:t></w:r></w:p></w:tc>
+        <w:tc><w:p/></w:tc>
+        <w:tc><w:p><w:r><w:t>Right</w:t></w:r></w:p></w:tc>
+      </w:tr>
+    </w:tbl>
+  </w:body>
+</w:document>`;
+
+      const doc = extractText(xml);
+      expect(doc.tables).toBeDefined();
+      expect(doc.tables![0].columnCount).toBe(2);
+      expect(doc.tables![0].rows[0].cells).toHaveLength(2);
+      expect(doc.tables![0].rows[0].cells[0].paragraphs[0].text).toBe('Left');
+      expect(doc.tables![0].rows[0].cells[1].paragraphs[0].text).toBe('Right');
+    });
+
+    it('should not detect column as spacer if any row has non-empty text in that column', () => {
+      const xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>
+    <w:tbl>
+      <w:tr>
+        <w:tc><w:p><w:r><w:t>A1</w:t></w:r></w:p></w:tc>
+        <w:tc><w:p/></w:tc>
+        <w:tc><w:p><w:r><w:t>C1</w:t></w:r></w:p></w:tc>
+      </w:tr>
+      <w:tr>
+        <w:tc><w:p><w:r><w:t>A2</w:t></w:r></w:p></w:tc>
+        <w:tc><w:p><w:r><w:t>B2</w:t></w:r></w:p></w:tc>
+        <w:tc><w:p><w:r><w:t>C2</w:t></w:r></w:p></w:tc>
+      </w:tr>
+    </w:tbl>
+  </w:body>
+</w:document>`;
+
+      const doc = extractText(xml);
+      expect(doc.tables).toBeDefined();
+      expect(doc.tables![0].columnCount).toBe(3);
+      expect(doc.tables![0].rows[0].cells).toHaveLength(3);
+    });
+  });
+
+  describe('BUG 4: Consecutive blank paragraph limiting', () => {
+    it('should limit consecutive blank paragraphs to at most 1', () => {
+      const doc: DocxDocument = {
+        paragraphs: [
+          { text: 'Start paragraph', runs: [{ text: 'Start paragraph' }] },
+          { text: '', runs: [], isEmpty: true },
+          { text: '', runs: [], isEmpty: true },
+          { text: '', runs: [], isEmpty: true },
+          { text: '', runs: [], isEmpty: true },
+          { text: 'End paragraph', runs: [{ text: 'End paragraph' }] },
+        ],
+        bodyItems: [
+          { type: 'paragraph', paragraph: { text: 'Start paragraph', runs: [{ text: 'Start paragraph' }] } },
+          { type: 'paragraph', paragraph: { text: '', runs: [], isEmpty: true } },
+          { type: 'paragraph', paragraph: { text: '', runs: [], isEmpty: true } },
+          { type: 'paragraph', paragraph: { text: '', runs: [], isEmpty: true } },
+          { type: 'paragraph', paragraph: { text: '', runs: [], isEmpty: true } },
+          { type: 'paragraph', paragraph: { text: 'End paragraph', runs: [{ text: 'End paragraph' }] } },
+        ],
+        text: 'Start paragraph\n\nEnd paragraph',
+      };
+
+      const result = convertDocxToTypst(doc);
+      expect(result.content).toBe('Start paragraph\n\n\n\nEnd paragraph');
+    });
+  });
 });

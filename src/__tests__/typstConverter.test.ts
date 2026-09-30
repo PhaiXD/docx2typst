@@ -975,7 +975,7 @@ describe('typstConverter', () => {
       };
 
       const result = convertTableToTypst(table);
-      expect(result).toBe('#table(\n  columns: 1,\n  stroke: 1pt,\n  [Line 1\nLine 2],\n)');
+      expect(result).toBe('#table(\n  columns: 1,\n  stroke: 1pt,\n  [Line 1\n\nLine 2],\n)');
     });
 
     it('should append tables at end of document in convertDocxToTypst', () => {

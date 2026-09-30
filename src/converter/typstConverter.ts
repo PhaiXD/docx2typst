@@ -253,7 +253,7 @@ function convertCellToTypst(cell: TableCell, options?: TypstConverterOptions): s
     }
   }
 
-  const content = paraTexts.length > 0 ? paraTexts.join('\n') : '';
+  const content = paraTexts.length > 0 ? paraTexts.join('\n\n') : '';
 
   const attrs: string[] = [];
   if (cell.columnSpan && cell.columnSpan > 1) {
@@ -297,9 +297,16 @@ export function convertTableToTypst(
   ];
 
   for (const row of table.rows) {
-    const cellsContent = row.cells
-      .map((cell) => convertCellToTypst(cell, options))
-      .join(', ');
+    let slotsUsed = 0;
+    const rowCells: string[] = [];
+    for (const cell of row.cells) {
+      if (slotsUsed >= table.columnCount) {
+        break; // skip trailing overflow cells
+      }
+      rowCells.push(convertCellToTypst(cell, options));
+      slotsUsed += cell.columnSpan ?? 1;
+    }
+    const cellsContent = rowCells.join(', ');
 
     if (row.isHeader) {
       lines.push('  table.header(');
@@ -399,12 +406,34 @@ export function convertDocxToTypst(
 
   function renderSectionItems(sectionItems: BodyItem[]): string {
     const renderedParts: string[] = [];
+    const filteredItems: BodyItem[] = [];
+    let consecutiveBlankCount = 0;
 
     for (const item of sectionItems) {
       if (item.type === 'paragraph') {
-        renderedParts.push(convertParagraphToTypst(item.paragraph, options));
+        const hasImages = Array.isArray(item.paragraph.images) && item.paragraph.images.length > 0;
+        const isHeading = !item.paragraph.listItem && getHeadingLevel(item.paragraph.style) !== null;
+        const isBlank =
+          !isHeading &&
+          (Boolean(item.paragraph.isEmpty) ||
+            ((!item.paragraph.text || item.paragraph.text.trim().length === 0) && !hasImages));
+
+        if (isBlank) {
+          consecutiveBlankCount++;
+          if (consecutiveBlankCount > 1) {
+            continue;
+          }
+          renderedParts.push('');
+          filteredItems.push(item);
+        } else {
+          consecutiveBlankCount = 0;
+          renderedParts.push(convertParagraphToTypst(item.paragraph, options));
+          filteredItems.push(item);
+        }
       } else {
+        consecutiveBlankCount = 0;
         renderedParts.push(convertTableToTypst(item.table, options));
+        filteredItems.push(item);
       }
     }
 
@@ -414,8 +443,8 @@ export function convertDocxToTypst(
         if (!paragraphSpacing) {
           sectionContent += '\n';
         } else {
-          const prevItem = sectionItems[i - 1];
-          const currItem = sectionItems[i];
+          const prevItem = filteredItems[i - 1];
+          const currItem = filteredItems[i];
           const isPrevList =
             prevItem.type === 'paragraph' && prevItem.paragraph.listItem !== undefined;
           const isCurrList =
@@ -433,6 +462,19 @@ export function convertDocxToTypst(
     return sectionContent;
   }
 
+  function hasActualParagraphContent(items: BodyItem[]): boolean {
+    for (const item of items) {
+      if (item.type === 'paragraph') {
+        const hasImages = Array.isArray(item.paragraph.images) && item.paragraph.images.length > 0;
+        const hasText = item.paragraph.text && item.paragraph.text.trim().length > 0;
+        if (hasText || hasImages) {
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
   const renderedSections: string[] = [];
 
   for (const section of sections) {
@@ -441,7 +483,13 @@ export function convertDocxToTypst(
       continue;
     }
 
-    if (section.columnCount > 1) {
+    const hasTable = section.items.some((it) => it.type === 'table');
+    const shouldWrapColumns =
+      section.columnCount > 1 &&
+      !hasTable &&
+      hasActualParagraphContent(section.items);
+
+    if (shouldWrapColumns) {
       const indented = rawContent
         .split('\n')
         .map((line) => (line.length > 0 ? `  ${line}` : ''))

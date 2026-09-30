@@ -30,6 +30,23 @@ function toArray<T>(value: unknown): T[] {
 }
 
 /**
+ * Checks whether a TableCell contains no meaningful text or images.
+ *
+ * @param cell - Target table cell.
+ * @returns True if the cell is completely empty.
+ */
+function isCellEmpty(cell: TableCell): boolean {
+  if (!cell.paragraphs || cell.paragraphs.length === 0) {
+    return true;
+  }
+  return cell.paragraphs.every((p) => {
+    const hasText = p.text && p.text.trim().length > 0;
+    const hasImages = Array.isArray(p.images) && p.images.length > 0;
+    return !hasText && !hasImages;
+  });
+}
+
+/**
  * Retrieves a property from a record matching one of several candidate keys.
  *
  * @param record - Target record.
@@ -124,6 +141,7 @@ export function extractTables(bodyNode: Record<string, unknown>): DocxTable[] {
 
       const tcNodes = toArray<Record<string, unknown>>(getProperty(trNode, 'w:tc', 'tc'));
       const cells: TableCell[] = [];
+      let consumed = 0;
 
       for (const tcNode of tcNodes) {
         if (!isRecord(tcNode)) {
@@ -210,7 +228,33 @@ export function extractTables(bodyNode: Record<string, unknown>): DocxTable[] {
           ...(isVerticalMerge ? { isVerticalMerge: true } : {}),
           ...(align !== undefined ? { align } : {}),
         };
+
+        // If logical cells already satisfy columnCount, skip extra phantom cells
+        if (columnCount > 0 && consumed >= columnCount && isCellEmpty(cell)) {
+          break;
+        }
+
         cells.push(cell);
+
+        if (!isVerticalMerge) {
+          consumed += columnSpan ?? 1;
+        }
+      }
+
+      // Drop trailing phantom cells (isVerticalMerge=true and isEmpty) if exceeding columnCount
+      if (columnCount > 0) {
+        while (cells.length > 0) {
+          const totalSlots = cells.reduce((sum, c) => sum + (c.columnSpan ?? 1), 0);
+          if (totalSlots <= columnCount) {
+            break;
+          }
+          const lastCell = cells[cells.length - 1];
+          if (lastCell.isVerticalMerge && isCellEmpty(lastCell)) {
+            cells.pop();
+          } else {
+            break;
+          }
+        }
       }
 
       // Detect isHeader for the row: if any cell's first paragraph has a style containing 'heading' or 'header'
@@ -228,6 +272,66 @@ export function extractTables(bodyNode: Record<string, unknown>): DocxTable[] {
         ...(isHeader ? { isHeader: true } : {}),
       };
       rows.push(row);
+    }
+
+    // Detect and remove narrow spacer columns (BUG 3)
+    const spacerCols: number[] = [];
+    for (let c = 0; c < columnCount; c++) {
+      let isSpacer = rows.length > 0;
+      for (const row of rows) {
+        let colIdx = 0;
+        let cellAtCol: TableCell | undefined;
+        let spanAtCol = 1;
+        for (const cell of row.cells) {
+          const span = cell.columnSpan ?? 1;
+          if (colIdx <= c && c < colIdx + span) {
+            cellAtCol = cell;
+            spanAtCol = span;
+            break;
+          }
+          colIdx += span;
+        }
+        if (!cellAtCol || spanAtCol > 1 || !isCellEmpty(cellAtCol)) {
+          isSpacer = false;
+          break;
+        }
+      }
+      if (isSpacer) {
+        spacerCols.push(c);
+      }
+    }
+
+    if (spacerCols.length > 0) {
+      for (let s = spacerCols.length - 1; s >= 0; s--) {
+        const spacerCol = spacerCols[s];
+        const newColCount = columnCount - 1;
+        for (const row of rows) {
+          let colIdx = 0;
+          let cellIndex = -1;
+          for (let i = 0; i < row.cells.length; i++) {
+            const cell = row.cells[i];
+            const span = cell.columnSpan ?? 1;
+            if (colIdx <= spacerCol && spacerCol < colIdx + span) {
+              cellIndex = i;
+              break;
+            }
+            colIdx += span;
+          }
+          if (cellIndex !== -1) {
+            const spacerCell = row.cells[cellIndex];
+            row.cells.splice(cellIndex, 1);
+            if (cellIndex > 0) {
+              const prevCell = row.cells[cellIndex - 1];
+              const spacerSpan = spacerCell.columnSpan ?? 1;
+              const currentTotalSlots = row.cells.reduce((sum, cl) => sum + (cl.columnSpan ?? 1), 0);
+              if (currentTotalSlots + spacerSpan <= newColCount) {
+                prevCell.columnSpan = (prevCell.columnSpan ?? 1) + spacerSpan;
+              }
+            }
+          }
+        }
+        columnCount = newColCount;
+      }
     }
 
     const table: DocxTable = {

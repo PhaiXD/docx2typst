@@ -1,165 +1,118 @@
-#columns(2)[
-  #underline[*WRITING TECHNIQUES OF RESEARCH ARTICLES START 2020*]
+#underline[*WRITING TECHNIQUES OF RESEARCH ARTICLES START 2020*]
 
 
 
-  *TITLE WRITTEN IN ENGLISH (UPPERCASE, TNR 11, BOLD, SPACE 1, CENTER) ( WRITE THE STUDY DESIGN USED)*
+*TITLE WRITTEN IN ENGLISH (UPPERCASE, TNR 11, BOLD, SPACE 1, CENTER) ( WRITE THE STUDY DESIGN USED)*
 
-  *_Title Written in_**Indonesian**_(Capital Each Word except conjunction is  lowercase, TNR 11, Bold, Space 1 center) (Write The Study Design Used)_*
+*_Title Written in_**Indonesian**_(Capital Each Word except conjunction is  lowercase, TNR 11, Bold, Space 1 center) (Write The Study Design Used)_*
 
-  *(Do not include the name of the author, agency, and e-mail in the article. All three will be written in the title page article format)*
+*(Do not include the name of the author, agency, and e-mail in the article. All three will be written in the title page article format)*
 
 
 
-  #table(
-    columns: 3,
-    stroke: 1pt,
-    [*ARTICLE INFO*
-  _Article History:_
-  Received:
-  July, 5th, 2019
-  Revised:
-  From August, 30th, 2019
-  Accepted:
-  September, 2nd, 2019
-  Published online October, 4th2019], table.cell(align: center)[], table.cell(align: center)[*_ABSTRACT_*
-  _The abstract is written in two languages, English and Indonesian, a maximum of 250 words. The abstract is written in Times New Roman 10 letters, spaced 1 in 1 column format._*_Background_*_: contains the background of the problem, some literature studies, identification of research problems._*_Purpose_*_: Contains research objectives that are described in a concise, clear, and concise manner._*_Methods_*_: It contains research designs, research objectives (population and samples), data sources, data collection techniques and instruments, and data analysis._*_Results_*_: The results of the study can be explained with the sentence as an example "the study shows the relationship of environmental factors with the incidence of tuberculosis in children because p = 0.02 \<α = 0.05"._*_Conclusion_*_: contains research findings in the form of answers to questions and research objectives in the form of the core of the research._
-  *_Keywords:_*_must be written with 3-6 words_
-  _(example: behavior, pregnant women, nutritional status)_
-  *ABSTRAK*
-  Abstrak ditulis dalam dua bahasa yaitu Bahasa Inggris dan Bahasa Indonesia maksimal 250 kata. Abstrak ditulis dengan huruf Times New Roman 10, spasi 1 dengan format 1 kolom.*Latar Belakang:*berisi latar belakang masalah, beberapa kajian pustaka, identifikasi masalah penelitian.*Tujuan:*Berisi tujuan penelitian yang dijabarkan secara padat, jelas, dan singkat.*Metode:*Berisi rancangan atau desain penelitian, sasaran penelitian (populasi dan sampel), sumber data, teknik dan instrumen  pengumpulan data, dan analisis data.*Hasil:*Hasil penelitian dapat dijelaskan dengan kalimat sebagai contoh “penelitian menunjukkan adanya hubungan faktor lingkungan dengan kejadian Tuberkulosis pada anak karena p = 0,02 \< α = 0,05”.*Kesimpulan:*berisi hasil temuan penelitian yang berupa jawaban dari pertanyaan dan tujuan penelitian yang berupa inti dari penelitian.
-  *Kata kunci:*kata kunci ditulis dalam 3-6 kata
-  (contoh: perilaku, ibu hamil, status gizi)],
-  )
+#table(
+  columns: 2,
+  stroke: 1pt,
+  [*ARTICLE INFO*
 
+_Article History:_
 
+Received:
 
+July, 5th, 2019
 
+Revised:
 
+From August, 30th, 2019
 
+Accepted:
 
+September, 2nd, 2019
 
+Published online October, 4th2019], table.cell(align: center)[*_ABSTRACT_*
 
+_The abstract is written in two languages, English and Indonesian, a maximum of 250 words. The abstract is written in Times New Roman 10 letters, spaced 1 in 1 column format._*_Background_*_: contains the background of the problem, some literature studies, identification of research problems._*_Purpose_*_: Contains research objectives that are described in a concise, clear, and concise manner._*_Methods_*_: It contains research designs, research objectives (population and samples), data sources, data collection techniques and instruments, and data analysis._*_Results_*_: The results of the study can be explained with the sentence as an example "the study shows the relationship of environmental factors with the incidence of tuberculosis in children because p = 0.02 \<α = 0.05"._*_Conclusion_*_: contains research findings in the form of answers to questions and research objectives in the form of the core of the research._
 
+*_Keywords:_*_must be written with 3-6 words_
 
+_(example: behavior, pregnant women, nutritional status)_
 
+*ABSTRAK*
 
+Abstrak ditulis dalam dua bahasa yaitu Bahasa Inggris dan Bahasa Indonesia maksimal 250 kata. Abstrak ditulis dengan huruf Times New Roman 10, spasi 1 dengan format 1 kolom.*Latar Belakang:*berisi latar belakang masalah, beberapa kajian pustaka, identifikasi masalah penelitian.*Tujuan:*Berisi tujuan penelitian yang dijabarkan secara padat, jelas, dan singkat.*Metode:*Berisi rancangan atau desain penelitian, sasaran penelitian (populasi dan sampel), sumber data, teknik dan instrumen  pengumpulan data, dan analisis data.*Hasil:*Hasil penelitian dapat dijelaskan dengan kalimat sebagai contoh “penelitian menunjukkan adanya hubungan faktor lingkungan dengan kejadian Tuberkulosis pada anak karena p = 0,02 \< α = 0,05”.*Kesimpulan:*berisi hasil temuan penelitian yang berupa jawaban dari pertanyaan dan tujuan penelitian yang berupa inti dari penelitian.
 
+*Kata kunci:*kata kunci ditulis dalam 3-6 kata
 
+(contoh: perilaku, ibu hamil, status gizi)],
+)
 
 
 
+*INTRODUCTION (bold, space 1)*
 
+The introduction contains background problems followed by several literature reviews, identification of problems with the inverted pyramid method starting from global, national, local and ending research objectives. Also write the state of art and novelty from your research here. The entire introduction is presented in an integrated manner in the form of paragraphs, with the length of the introduction 15% -20% of the total length of the article.Each paragraph starts with words that are indented into five digits.
 
 
 
+*METHOD (bold, space 1)*
 
+The method section contains an explanation in the form of paragraphs about the design or research design, research objectives (population and sample), data sources, data collection techniques and instruments, and data analysis conducted by researchers with a length of 10% -15% of the total length of the article. Please also write the ethical clearance of our research.
 
+The paragraph starts with words that are indented into five digits.In the method section of this research, if there are ethical test results, they can be listed (number, location, and date of ethical testing).
 
 
 
+*RESULT (bold, space 1)*
 
+The results contain research output by describing authentic and valid findings and following the objectives and research methods The writing result is written with indented into five digits.*Examples of writing statistical results in table format are:*
 
 
 
+Table 1. Risk of Exposure to Cigarette Smoke Against Incidence of Anemia in Pregnant Women Year X in the Work Area of ​​Health Center Y
 
+#table(
+  columns: 4,
+  stroke: 1pt,
+  [], table.cell(colspan: 2, align: center)[*Anemia*], [],
+  [], table.cell(align: center)[*Yes*], table.cell(align: center)[*No*], [],
+  table.cell(align: center)[......................], [.....................], [.....................], [.....................],
+  table.cell(align: center)[.....................], [.....................], [.....................], [.....................],
+  table.cell(align: center)[Total], [.....................], [.....................], [.....................],
+)
 
 
 
+Examples of explanation / narrative table is: The results showed a risk of
 
 
 
+exposure to cigarette smoke to the incidence of anemia in pregnant women by 4.04 times because OR = 4.09; 95% CI (1.07 \<OR \<16.26).
 
 
 
+Table 2. Relationship between Environmental Factors and the Occurrence of Tuberculosis in Year X Children in District Y
 
+#table(
+  columns: 4,
+  stroke: 1pt,
+  [], table.cell(colspan: 2, align: center)[*Tuberculosis in Children*], [],
+  [], table.cell(align: center)[*Yes*], table.cell(align: center)[*No*], [],
+  table.cell(align: center)[.....................], table.cell(align: center)[........................], [........................], [........................],
+  table.cell(align: center)[......................], table.cell(align: center)[.......................], [........................], [........................],
+  table.cell(align: center)[Total], [........................], [........................], [........................],
+)
 
 
 
+Example explanation / narrative table is: The results showed an association of environmental factors with the incidence of tuberculosis in children.
 
+The descriptions or table titles are placed on the table. Each table must be numbered (such as: "Table 1"). The table is typed in 1 space with the letter size 11 pt and is numbered according to the appearance in the text. The table title is short and complete.
 
+The table may not be clipped and must be made into one page. However, if it has to be continued on the next sheet, the table title will be returned and the information "cont’". Table writing cannot precede the narration. Table Title uses Capitalize Each Word (except the lowercase conjunctions).
 
 
-
-
-  *INTRODUCTION (bold, space 1)*
-
-  The introduction contains background problems followed by several literature reviews, identification of problems with the inverted pyramid method starting from global, national, local and ending research objectives. Also write the state of art and novelty from your research here. The entire introduction is presented in an integrated manner in the form of paragraphs, with the length of the introduction 15% -20% of the total length of the article.Each paragraph starts with words that are indented into five digits.
-
-
-
-  *METHOD (bold, space 1)*
-
-  The method section contains an explanation in the form of paragraphs about the design or research design, research objectives (population and sample), data sources, data collection techniques and instruments, and data analysis conducted by researchers with a length of 10% -15% of the total length of the article. Please also write the ethical clearance of our research.
-
-  The paragraph starts with words that are indented into five digits.In the method section of this research, if there are ethical test results, they can be listed (number, location, and date of ethical testing).
-
-
-
-  *RESULT (bold, space 1)*
-
-  The results contain research output by describing authentic and valid findings and following the objectives and research methods The writing result is written with indented into five digits.*Examples of writing statistical results in table format are:*
-]
-
-#columns(2)[
-
-
-  Table 1. Risk of Exposure to Cigarette Smoke Against Incidence of Anemia in Pregnant Women Year X in the Work Area of ​​Health Center Y
-
-  #table(
-    columns: 4,
-    stroke: 1pt,
-    [], table.cell(colspan: 2, align: center)[*Anemia*], [], [],
-    [], table.cell(align: center)[*Yes*], table.cell(align: center)[*No*], [], [],
-    table.cell(align: center)[......................], [.....................], [.....................], [.....................], [],
-    table.cell(align: center)[.....................], [.....................], [.....................], [.....................], [],
-    table.cell(align: center)[Total], [.....................], [.....................], [.....................], [],
-  )
-
-
-
-  Examples of explanation / narrative table is: The results showed a risk of
-
-
-
-  exposure to cigarette smoke to the incidence of anemia in pregnant women by 4.04 times because OR = 4.09; 95% CI (1.07 \<OR \<16.26).
-]
 
 #columns(2)[
-
-
-  Table 2. Relationship between Environmental Factors and the Occurrence of Tuberculosis in Year X Children in District Y
-
-  #table(
-    columns: 4,
-    stroke: 1pt,
-    [], table.cell(colspan: 2, align: center)[*Tuberculosis in Children*], [], [],
-    [], table.cell(align: center)[*Yes*], table.cell(align: center)[*No*], [], [],
-    table.cell(align: center)[.....................], table.cell(align: center)[........................], [........................], [........................], [],
-    table.cell(align: center)[......................], table.cell(align: center)[.......................], [........................], [........................], [],
-    table.cell(align: center)[Total], [........................], [........................], [........................], [],
-  )
-
-
-
-  Example explanation / narrative table is: The results showed an association of environmental factors with the incidence of tuberculosis in children.
-
-  The descriptions or table titles are placed on the table. Each table must be numbered (such as: "Table 1"). The table is typed in 1 space with the letter size 11 pt and is numbered according to the appearance in the text. The table title is short and complete.
-
-  The table may not be clipped and must be made into one page. However, if it has to be continued on the next sheet, the table title will be returned and the information "cont’". Table writing cannot precede the narration. Table Title uses Capitalize Each Word (except the lowercase conjunctions).
-
-
-]
-
-#columns(2)[
-
-
-
-
-
-
-
-
 
 
   *Then, the sample results in the form of figure are:*
@@ -172,8 +125,6 @@
   The description or title of the image is placed under the picture. Each picture must be numbered (such as: "Figure 1"). The title of the image is made brief and complete. Images must not be cropped and must be made into one page and center position. Then, the image resolution must be high so that the image does not break. Table Title uses Capitalize Each Word (except the lowercase conjunctions). If the image is from a secondary data source, then the source is written below the image. Like the example below:
 
   #image("images/image2.png", width: 79%)
-
-
 
 
 
@@ -206,10 +157,6 @@
   *ACKNOWLEDGMENTS (if there are)*
 
   The acknowledgments are mainly addressed to research funders or donors. Acknowledgments can also be conveyed to those who helped carry out the research.Each paragraph starts with words that are indented into five digits.
-
-
-
-
 
 
 
@@ -300,8 +247,6 @@
   + Proceedings:
 
   Hopkins, W. C., Horton, M. J., and Arnold, C. S. (1995)_"Target-Independent High-Level Microprogramming."_Proceedings of the 18th Annual Workshop on Microprogramming. IEEE Computer Society Press, Los Angeles, 137 - 144.
-
-
 
 
 
