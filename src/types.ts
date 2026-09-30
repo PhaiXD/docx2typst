@@ -160,6 +160,11 @@ export interface ListItemInfo {
    * The resolved list type: unordered bullet or ordered numbered list.
    */
   listType: 'bullet' | 'ordered';
+
+  /**
+   * Numbering format string (e.g. 'bullet', 'decimal', 'lowerLetter', 'lowerRoman').
+   */
+  numFmt?: string;
 }
 
 /**
@@ -171,6 +176,18 @@ export type NumIdMap = Map<number, number>;
  * Mapping from compound key `"${abstractNumId}:${level}"` to list type (`bullet` or `ordered`).
  */
 export type AbstractNumMap = Map<string, 'bullet' | 'ordered'>;
+
+/**
+ * Mapping from compound key `"${abstractNumId}:${level}"` to numbering format string (`w:numFmt @w:val`).
+ */
+export type AbstractNumFmtMap = Map<string, string>;
+
+/**
+ * Section properties describing page or multi-column layout.
+ */
+export interface SectionProperties {
+  columnCount: number;
+}
 
 /**
  * Represents a paragraph (`w:p`) within a Word document body.
@@ -206,6 +223,11 @@ export interface Paragraph {
    * Embedded images contained within this paragraph.
    */
   images?: DocxImage[];
+
+  /**
+   * Section break properties defined at the end of this paragraph.
+   */
+  sectionBreak?: SectionProperties;
 }
 
 /**
@@ -226,6 +248,11 @@ export interface TableCell {
    * Indicates whether this cell is vertically merged (`w:vMerge`).
    */
   isVerticalMerge?: boolean;
+
+  /**
+   * Cell text alignment ('left' | 'center' | 'right').
+   */
+  align?: 'left' | 'center' | 'right';
 }
 
 /**
@@ -264,6 +291,13 @@ export interface DocxTable {
 }
 
 /**
+ * Represents an item in document order within the document body.
+ */
+export type BodyItem =
+  | { type: 'paragraph'; paragraph: Paragraph }
+  | { type: 'table'; table: DocxTable };
+
+/**
  * Represents the structured content of a parsed .docx document.
  */
 export interface DocxDocument {
@@ -281,6 +315,16 @@ export interface DocxDocument {
    * The list of tables extracted from the document body in order of appearance.
    */
   tables?: DocxTable[];
+
+  /**
+   * Document-level section properties (e.g. final section multi-column layout).
+   */
+  sections?: SectionProperties[];
+
+  /**
+   * Document items in appearance order, interleaving paragraphs and tables.
+   */
+  bodyItems?: BodyItem[];
 }
 
 /**

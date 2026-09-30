@@ -3,17 +3,21 @@
  * Module for parsing OOXML WordprocessingML content and extracting structured text.
  */
 
-import { parseXml } from '../utils/xmlParser.js';
+import { parseXml, parseXmlPreserveOrder } from '../utils/xmlParser.js';
 import { extractTables } from './tableExtractor.js';
 import { extractImageMetadata } from './imageExtractor.js';
 import type {
+  AbstractNumFmtMap,
   AbstractNumMap,
+  BodyItem,
   DocxDocument,
   DocxImage,
   DocxParserOptions,
+  DocxTable,
   ListItemInfo,
   NumIdMap,
   Paragraph,
+  SectionProperties,
   TextRun,
 } from '../types.js';
 
@@ -25,6 +29,38 @@ import type {
  */
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/**
+ * Recursively discovers all w:txbxContent nodes within a drawing or shape container.
+ *
+ * @param node - Container node.
+ * @returns Array of w:txbxContent record nodes found.
+ */
+function findTxbxContentNodes(node: unknown): Record<string, unknown>[] {
+  const results: Record<string, unknown>[] = [];
+  function search(curr: unknown): void {
+    if (!isRecord(curr)) return;
+    for (const [key, val] of Object.entries(curr)) {
+      if (key === 'w:txbxContent' || key === 'txbxContent') {
+        if (isRecord(val)) {
+          results.push(val);
+        } else if (Array.isArray(val)) {
+          for (const item of val) {
+            if (isRecord(item)) results.push(item);
+          }
+        }
+      } else if (isRecord(val)) {
+        search(val);
+      } else if (Array.isArray(val)) {
+        for (const item of val) {
+          search(item);
+        }
+      }
+    }
+  }
+  search(node);
+  return results;
 }
 
 /**
@@ -248,6 +284,28 @@ function extractRunsFromContainer(
     if (run !== null) {
       runs.push(run);
     }
+
+    // Check for text boxes in drawings or pict elements inside this run
+    if (isRecord(rNode)) {
+      const drawingNodes = toArray(
+        getProperty(rNode, 'w:drawing', 'drawing', 'w:pict', 'pict'),
+      );
+      for (const drawing of drawingNodes) {
+        const txbxNodes = findTxbxContentNodes(drawing);
+        for (const txbx of txbxNodes) {
+          const pNodes = toArray(getProperty(txbx, 'w:p', 'p'));
+          for (let pIdx = 0; pIdx < pNodes.length; pIdx++) {
+            const p = pNodes[pIdx];
+            if (isRecord(p)) {
+              if (pIdx > 0 && runs.length > 0) {
+                runs.push({ text: '\n' });
+              }
+              runs.push(...extractRunsFromContainer(p, imageMap, paragraphImages));
+            }
+          }
+        }
+      }
+    }
   }
 
   // Runs nested inside hyperlinks (w:hyperlink)
@@ -257,6 +315,26 @@ function extractRunsFromContainer(
   for (const hyperlink of hyperlinks) {
     if (isRecord(hyperlink)) {
       runs.push(...extractRunsFromContainer(hyperlink, imageMap, paragraphImages));
+    }
+  }
+
+  // Also check container directly for drawing/pict nodes containing text boxes
+  const directDrawings = toArray(
+    getProperty(container, 'w:drawing', 'drawing', 'w:pict', 'pict'),
+  );
+  for (const drawing of directDrawings) {
+    const txbxNodes = findTxbxContentNodes(drawing);
+    for (const txbx of txbxNodes) {
+      const pNodes = toArray(getProperty(txbx, 'w:p', 'p'));
+      for (let pIdx = 0; pIdx < pNodes.length; pIdx++) {
+        const p = pNodes[pIdx];
+        if (isRecord(p)) {
+          if (pIdx > 0 && runs.length > 0) {
+            runs.push({ text: '\n' });
+          }
+          runs.push(...extractRunsFromContainer(p, imageMap, paragraphImages));
+        }
+      }
     }
   }
 
@@ -295,6 +373,28 @@ export function extractParagraph(
       const styleVal = getProperty(pStyleRaw, '@_w:val', '@_val');
       if (styleVal !== undefined && styleVal !== null) {
         style = String(styleVal);
+      }
+    }
+  }
+
+  // Check for section break properties (w:sectPr / sectPr)
+  let sectionBreak: SectionProperties | undefined;
+  if (pPr) {
+    const sectPrRaw = getProperty(pPr, 'w:sectPr', 'sectPr');
+    if (isRecord(sectPrRaw)) {
+      let columnCount = 1;
+      const colsRaw = getProperty(sectPrRaw, 'w:cols', 'cols');
+      if (isRecord(colsRaw)) {
+        const numVal = getProperty(colsRaw, '@_w:num', '@_num', '@w:num', 'num', '@_w:val', '@_val', 'val');
+        if (numVal !== undefined && numVal !== null) {
+          const parsed = parseInt(String(numVal), 10);
+          if (!isNaN(parsed)) {
+            columnCount = parsed;
+          }
+        }
+      }
+      if (columnCount > 1) {
+        sectionBreak = { columnCount };
       }
     }
   }
@@ -366,20 +466,22 @@ export function extractParagraph(
     ...(isEmpty ? { isEmpty: true } : {}),
     ...(listItem !== undefined ? { listItem } : {}),
     ...(paragraphImages.length > 0 ? { images: paragraphImages } : {}),
+    ...(sectionBreak !== undefined ? { sectionBreak } : {}),
   };
 }
 
 /**
  * Parses raw WordprocessingML XML content into a structured DocxDocument.
  *
- * Navigates the OOXML hierarchy: `w:document` -> `w:body` -> `w:p` -> `w:r` -> `w:t`.
+ * Navigates the OOXML hierarchy: `w:document` -> `w:body` -> `w:p` / `w:tbl` / `w:sdt`.
  * Handles formatting indicators (`w:b`, `w:i`, `w:u`), paragraph styles (`w:pStyle`),
- * empty paragraphs, whitespace preservation, and images.
+ * multi-column sections, empty paragraphs, whitespace preservation, text boxes, and images.
+ * Preserves document order via bodyItems.
  *
  * @param rawXml - Raw XML string from `word/document.xml`.
  * @param options - Optional parser configuration.
  * @param imageMap - Optional mapping of relationship IDs to DocxImage objects.
- * @returns The structured DocxDocument containing paragraphs and plain text.
+ * @returns The structured DocxDocument containing paragraphs, plain text, and body items.
  * @throws {DocxParseError} If the XML is malformed or cannot be parsed.
  */
 export function extractText(
@@ -397,21 +499,146 @@ export function extractText(
   const bodyRoot = getProperty(rootObj, 'w:body', 'body');
   const bodyObj = isRecord(bodyRoot) ? bodyRoot : rootObj;
 
-  // Extract paragraphs (w:p)
+  // Check for w:sectPr directly in bodyObj (final section properties)
+  const sections: SectionProperties[] = [];
+  if (isRecord(bodyObj)) {
+    const bodySectPr = getProperty(bodyObj, 'w:sectPr', 'sectPr');
+    if (isRecord(bodySectPr)) {
+      let columnCount = 1;
+      const colsNode = getProperty(bodySectPr, 'w:cols', 'cols');
+      if (isRecord(colsNode)) {
+        const numVal = getProperty(colsNode, '@_w:num', '@_num', '@w:num', 'num', '@_w:val', '@_val', 'val');
+        if (numVal !== undefined && numVal !== null) {
+          const parsed = parseInt(String(numVal), 10);
+          if (!isNaN(parsed)) {
+            columnCount = parsed;
+          }
+        }
+      }
+      if (columnCount > 1) {
+        sections.push({ columnCount });
+      }
+    }
+  }
+
   const pNodes = toArray(getProperty(bodyObj, 'w:p', 'p'));
-  const paragraphs: Paragraph[] = pNodes.map((pNode) =>
-    extractParagraph(pNode, options, imageMap),
-  );
+  const tblNodes = toArray<Record<string, unknown>>(getProperty(bodyObj, 'w:tbl', 'tbl'));
+  const sdtNodes = toArray<Record<string, unknown>>(getProperty(bodyObj, 'w:sdt', 'sdt'));
 
-  const text = paragraphs.map((p) => p.text).join('\n');
+  let orderedParagraphs: Paragraph[] = [];
+  let orderedTables: DocxTable[] = [];
+  let bodyItems: BodyItem[] = [];
 
-  // Extract tables (w:tbl)
-  const tables = isRecord(bodyObj) ? extractTables(bodyObj) : [];
+  let preserveOrderSuccess = false;
+
+  try {
+    const orderedRoots = parseXmlPreserveOrder(rawXml);
+    const findChildInOrdered = (
+      items: Array<Record<string, unknown>>,
+      ...names: string[]
+    ): Array<Record<string, unknown>> | undefined => {
+      for (const item of items) {
+        for (const name of names) {
+          if (name in item && Array.isArray(item[name])) {
+            return item[name] as Array<Record<string, unknown>>;
+          }
+        }
+      }
+      return undefined;
+    };
+
+    const docChildren = findChildInOrdered(orderedRoots, 'w:document', 'document') ?? orderedRoots;
+    const bodyChildren = findChildInOrdered(docChildren, 'w:body', 'body');
+
+    if (bodyChildren && bodyChildren.length > 0) {
+      let pIndex = 0;
+      let tblIndex = 0;
+      let sdtIndex = 0;
+
+      for (const child of bodyChildren) {
+        const tagName = Object.keys(child).find((k) => k !== ':@');
+        if (!tagName) continue;
+
+        if (tagName === 'w:p' || tagName === 'p') {
+          if (pIndex < pNodes.length) {
+            const para = extractParagraph(pNodes[pIndex++], options, imageMap);
+            orderedParagraphs.push(para);
+            bodyItems.push({ type: 'paragraph', paragraph: para });
+          }
+        } else if (tagName === 'w:tbl' || tagName === 'tbl') {
+          if (tblIndex < tblNodes.length) {
+            const tableWrapper = { 'w:tbl': [tblNodes[tblIndex++]] };
+            const extracted = extractTables(tableWrapper);
+            if (extracted.length > 0) {
+              orderedTables.push(extracted[0]);
+              bodyItems.push({ type: 'table', table: extracted[0] });
+            }
+          }
+        } else if (tagName === 'w:sdt' || tagName === 'sdt') {
+          if (sdtIndex < sdtNodes.length) {
+            const sdtNode = sdtNodes[sdtIndex++];
+            const sdtContent = getProperty(sdtNode, 'w:sdtContent', 'sdtContent');
+            if (isRecord(sdtContent)) {
+              const sdtPNodes = toArray(getProperty(sdtContent, 'w:p', 'p'));
+              for (const sdtP of sdtPNodes) {
+                const para = extractParagraph(sdtP, options, imageMap);
+                orderedParagraphs.push(para);
+                bodyItems.push({ type: 'paragraph', paragraph: para });
+              }
+              const sdtTblNodes = toArray(getProperty(sdtContent, 'w:tbl', 'tbl'));
+              for (const sdtTbl of sdtTblNodes) {
+                const tableWrapper = { 'w:tbl': [sdtTbl] };
+                const extracted = extractTables(tableWrapper);
+                if (extracted.length > 0) {
+                  orderedTables.push(extracted[0]);
+                  bodyItems.push({ type: 'table', table: extracted[0] });
+                }
+              }
+            }
+          }
+        }
+      }
+
+      // Append any remaining paragraphs or tables if not visited in bodyChildren
+      while (pIndex < pNodes.length) {
+        const para = extractParagraph(pNodes[pIndex++], options, imageMap);
+        orderedParagraphs.push(para);
+        bodyItems.push({ type: 'paragraph', paragraph: para });
+      }
+      while (tblIndex < tblNodes.length) {
+        const tableWrapper = { 'w:tbl': [tblNodes[tblIndex++]] };
+        const extracted = extractTables(tableWrapper);
+        if (extracted.length > 0) {
+          orderedTables.push(extracted[0]);
+          bodyItems.push({ type: 'table', table: extracted[0] });
+        }
+      }
+
+      preserveOrderSuccess = true;
+    }
+  } catch {
+    // Graceful fallback
+  }
+
+  if (!preserveOrderSuccess) {
+    orderedParagraphs = pNodes.map((pNode) =>
+      extractParagraph(pNode, options, imageMap),
+    );
+    orderedTables = isRecord(bodyObj) ? extractTables(bodyObj) : [];
+    bodyItems = [
+      ...orderedParagraphs.map((p) => ({ type: 'paragraph' as const, paragraph: p })),
+      ...orderedTables.map((t) => ({ type: 'table' as const, table: t })),
+    ];
+  }
+
+  const text = orderedParagraphs.map((p) => p.text).join('\n');
 
   return {
-    paragraphs,
+    paragraphs: orderedParagraphs,
     text,
-    tables,
+    tables: orderedTables,
+    ...(sections.length > 0 ? { sections } : {}),
+    bodyItems,
   };
 }
 
@@ -427,37 +654,87 @@ export function extractText(
  * @param doc - The parsed DOCX document structure.
  * @param numIdMap - Mapping from numId to abstractNumId.
  * @param abstractNumMap - Mapping from "${abstractNumId}:${level}" to 'bullet' | 'ordered'.
+ * @param abstractNumFmtMap - Optional mapping from "${abstractNumId}:${level}" to numFmt string.
  * @returns A new DocxDocument with resolved list items.
  */
 export function resolveListItems(
   doc: DocxDocument,
   numIdMap: NumIdMap,
   abstractNumMap: AbstractNumMap,
+  abstractNumFmtMap?: AbstractNumFmtMap,
 ): DocxDocument {
-  const paragraphs: Paragraph[] = doc.paragraphs.map((para) => {
+  const resolvePara = (para: Paragraph): Paragraph => {
     if (!para.listItem) {
       return { ...para };
     }
 
     const { numId, level } = para.listItem;
-    const abstractNumId = numIdMap.get(numId) ?? 0;
-    const listType = abstractNumMap.get(`${abstractNumId}:${level}`) ?? 'bullet';
+    let abstractNumId = numIdMap.get(numId);
+    if (abstractNumId === undefined) {
+      if (abstractNumMap.has(`${numId}:${level}`) || abstractNumMap.has(`${numId}:0`)) {
+        abstractNumId = numId;
+      } else {
+        abstractNumId = 0;
+      }
+    }
+
+    let listType = abstractNumMap.get(`${abstractNumId}:${level}`);
+    let numFmt = abstractNumFmtMap?.get(`${abstractNumId}:${level}`);
+
+    if (listType === undefined) {
+      for (let l = level - 1; l >= 0; l--) {
+        const fallbackType = abstractNumMap.get(`${abstractNumId}:${l}`);
+        if (fallbackType !== undefined) {
+          listType = fallbackType;
+          numFmt = abstractNumFmtMap?.get(`${abstractNumId}:${l}`);
+          break;
+        }
+      }
+    }
+
+    if (listType === undefined) {
+      for (const [key, type] of abstractNumMap.entries()) {
+        if (key.startsWith(`${abstractNumId}:`)) {
+          listType = type;
+          numFmt = abstractNumFmtMap?.get(key);
+          break;
+        }
+      }
+    }
+
+    if (listType === undefined) {
+      listType = 'bullet';
+    }
 
     const listItem: ListItemInfo = {
       abstractNumId,
       numId,
       level,
       listType,
+      ...(numFmt !== undefined ? { numFmt } : {}),
     };
 
     return {
       ...para,
       listItem,
     };
+  };
+
+  const paragraphs: Paragraph[] = doc.paragraphs.map(resolvePara);
+
+  const bodyItems = doc.bodyItems?.map((item) => {
+    if (item.type === 'paragraph') {
+      return {
+        type: 'paragraph' as const,
+        paragraph: resolvePara(item.paragraph),
+      };
+    }
+    return item;
   });
 
   return {
     ...doc,
     paragraphs,
+    ...(bodyItems ? { bodyItems } : {}),
   };
 }

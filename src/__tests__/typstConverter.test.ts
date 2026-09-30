@@ -835,7 +835,7 @@ describe('typstConverter', () => {
 
       const result = convertTableToTypst(table);
       expect(result).toBe(
-        '#table(\n  columns: 2,\n  [Cell 1], [Cell 2],\n  [Cell 3], [Cell 4],\n)',
+        '#table(\n  columns: 2,\n  stroke: 1pt,\n  [Cell 1], [Cell 2],\n  [Cell 3], [Cell 4],\n)',
       );
     });
 
@@ -861,7 +861,7 @@ describe('typstConverter', () => {
 
       const result = convertTableToTypst(table);
       expect(result).toBe(
-        '#table(\n  columns: 2,\n  table.header(\n    [Header A], [Header B],\n  ),\n  [Cell 1], [Cell 2],\n)',
+        '#table(\n  columns: 2,\n  stroke: 1pt,\n  table.header(\n    [Header A], [Header B],\n  ),\n  [Cell 1], [Cell 2],\n)',
       );
     });
 
@@ -886,7 +886,7 @@ describe('typstConverter', () => {
 
       const result = convertTableToTypst(table);
       expect(result).toBe(
-        '#table(\n  columns: 2,\n  [Row 1 Col 1], [Row 1 Col 2],\n  [Row 2 Col 1], [Row 2 Col 2],\n)',
+        '#table(\n  columns: 2,\n  stroke: 1pt,\n  [Row 1 Col 1], [Row 1 Col 2],\n  [Row 2 Col 1], [Row 2 Col 2],\n)',
       );
     });
 
@@ -910,7 +910,7 @@ describe('typstConverter', () => {
       };
 
       const result = convertTableToTypst(table);
-      expect(result).toBe('#table(\n  columns: 1,\n  [*Bold text*],\n)');
+      expect(result).toBe('#table(\n  columns: 1,\n  stroke: 1pt,\n  [*Bold text*],\n)');
     });
 
     it('should produce [] for an empty cell', () => {
@@ -937,7 +937,7 @@ describe('typstConverter', () => {
       };
 
       const result = convertTableToTypst(table);
-      expect(result).toBe('#table(\n  columns: 2,\n  [], [],\n)');
+      expect(result).toBe('#table(\n  columns: 2,\n  stroke: 1pt,\n  [], [],\n)');
     });
 
     it('should format single-row table (no header)', () => {
@@ -954,7 +954,7 @@ describe('typstConverter', () => {
       };
 
       const result = convertTableToTypst(table);
-      expect(result).toBe('#table(\n  columns: 2,\n  [Item 1], [Item 2],\n)');
+      expect(result).toBe('#table(\n  columns: 2,\n  stroke: 1pt,\n  [Item 1], [Item 2],\n)');
     });
 
     it('should format cell with multiple paragraphs joined with newline', () => {
@@ -975,7 +975,7 @@ describe('typstConverter', () => {
       };
 
       const result = convertTableToTypst(table);
-      expect(result).toBe('#table(\n  columns: 1,\n  [Line 1\nLine 2],\n)');
+      expect(result).toBe('#table(\n  columns: 1,\n  stroke: 1pt,\n  [Line 1\nLine 2],\n)');
     });
 
     it('should append tables at end of document in convertDocxToTypst', () => {
@@ -1004,7 +1004,7 @@ describe('typstConverter', () => {
 
       const result = convertDocxToTypst(doc);
       expect(result.content).toBe(
-        'Intro paragraph\n\n#table(\n  columns: 2,\n  [A], [B],\n)',
+        'Intro paragraph\n\n#table(\n  columns: 2,\n  stroke: 1pt,\n  [A], [B],\n)',
       );
     });
 
@@ -1027,7 +1027,7 @@ describe('typstConverter', () => {
       };
 
       const result = convertDocxToTypst(doc);
-      expect(result.content).toBe('#table(\n  columns: 1,\n  [Solo cell],\n)');
+      expect(result.content).toBe('#table(\n  columns: 1,\n  stroke: 1pt,\n  [Solo cell],\n)');
     });
   });
 

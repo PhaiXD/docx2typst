@@ -28,6 +28,9 @@ export type {
   ListItemInfo,
   NumIdMap,
   AbstractNumMap,
+  AbstractNumFmtMap,
+  SectionProperties,
+  BodyItem,
   TableCell,
   TableRow,
   DocxTable,
@@ -37,7 +40,7 @@ export type {
 export { DocxReadError, DocxParseError, type DocxErrorOptions } from './errors.js';
 
 // Re-export parsing and extraction utilities
-export { parseXml } from './utils/xmlParser.js';
+export { parseXml, parseXmlPreserveOrder } from './utils/xmlParser.js';
 export { readDocxFile } from './reader.js';
 export { extractText, resolveListItems } from './extractor/textExtractor.js';
 export { extractNumberingMaps } from './extractor/numberingExtractor.js';
@@ -97,8 +100,10 @@ export async function convertDocxToText(
   const rawContent = await readDocxFile(filePath);
   let document = extractText(rawContent.documentXml, options, rawContent.imageMap);
   if (rawContent.numberingXml) {
-    const { numIdMap, abstractNumMap } = extractNumberingMaps(rawContent.numberingXml);
-    document = resolveListItems(document, numIdMap, abstractNumMap);
+    const { numIdMap, abstractNumMap, abstractNumFmtMap } = extractNumberingMaps(
+      rawContent.numberingXml,
+    );
+    document = resolveListItems(document, numIdMap, abstractNumMap, abstractNumFmtMap);
   }
   return document.text;
 }
@@ -144,8 +149,10 @@ export async function convertDocxFile(
   const rawContent = await readDocxFile(filePath);
   let document = extractText(rawContent.documentXml, undefined, rawContent.imageMap);
   if (rawContent.numberingXml) {
-    const { numIdMap, abstractNumMap } = extractNumberingMaps(rawContent.numberingXml);
-    document = resolveListItems(document, numIdMap, abstractNumMap);
+    const { numIdMap, abstractNumMap, abstractNumFmtMap } = extractNumberingMaps(
+      rawContent.numberingXml,
+    );
+    document = resolveListItems(document, numIdMap, abstractNumMap, abstractNumFmtMap);
   }
   return convertDocxToTypst(document, options);
 }

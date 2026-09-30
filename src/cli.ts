@@ -7,7 +7,16 @@
 import process from 'node:process';
 import { readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { convertDocxFile, convertDocxToText } from './index.js';
+import {
+  convertDocxToText,
+  convertDocxToTypst,
+  extractNumberingMaps,
+  extractText,
+  readDocxFile,
+  resolveListItems,
+  saveImages,
+} from './index.js';
+import type { DocxImage } from './types.js';
 import { DocxParseError, DocxReadError } from './errors.js';
 
 /**
@@ -169,6 +178,9 @@ export async function runCli(args: string[]): Promise<number> {
 
   for (const filePath of options.files) {
     try {
+      const parsed = path.parse(filePath);
+      const outputPath = path.join(parsed.dir, `${parsed.name}.typ`);
+
       let content: string;
       if (options.textOnly) {
         let text = await convertDocxToText(filePath, {
@@ -179,11 +191,50 @@ export async function runCli(args: string[]): Promise<number> {
         }
         content = text;
       } else {
-        const typstDoc = await convertDocxFile(filePath, {
+        const rawContent = await readDocxFile(filePath);
+        let docxDoc = extractText(rawContent.documentXml, undefined, rawContent.imageMap);
+        if (rawContent.numberingXml) {
+          const { numIdMap, abstractNumMap, abstractNumFmtMap } = extractNumberingMaps(
+            rawContent.numberingXml,
+          );
+          docxDoc = resolveListItems(docxDoc, numIdMap, abstractNumMap, abstractNumFmtMap);
+        }
+        const typstDoc = convertDocxToTypst(docxDoc, {
           includeHeader: options.header,
           imageOutputDir: options.imagesDir,
           escapeSpecialChars: !options.noEscape,
         });
+
+        // Collect all DocxImage objects from all paragraphs and table cells that have images
+        const allImages: DocxImage[] = [];
+        for (const p of docxDoc.paragraphs) {
+          if (p.images && p.images.length > 0) {
+            allImages.push(...p.images);
+          }
+        }
+        if (docxDoc.tables) {
+          for (const tbl of docxDoc.tables) {
+            for (const row of tbl.rows) {
+              for (const cell of row.cells) {
+                for (const p of cell.paragraphs) {
+                  if (p.images && p.images.length > 0) {
+                    allImages.push(...p.images);
+                  }
+                }
+              }
+            }
+          }
+        }
+
+        const uniqueImages = Array.from(
+          new Map(allImages.map((img) => [img.zipPath, img])).values(),
+        );
+
+        if (uniqueImages.length > 0 && rawContent.zipInstance) {
+          const absoluteImagesDir = path.resolve(path.dirname(outputPath), options.imagesDir);
+          await saveImages(uniqueImages, rawContent.zipInstance, absoluteImagesDir);
+        }
+
         content = typstDoc.content;
       }
 
@@ -191,8 +242,6 @@ export async function runCli(args: string[]): Promise<number> {
         console.log(content);
         successCount++;
       } else {
-        const parsed = path.parse(filePath);
-        const outputPath = path.join(parsed.dir, `${parsed.name}.typ`);
         try {
           await writeFile(outputPath, content, 'utf-8');
           successCount++;

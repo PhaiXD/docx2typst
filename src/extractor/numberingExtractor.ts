@@ -4,7 +4,7 @@
  */
 
 import { parseXml } from '../utils/xmlParser.js';
-import type { AbstractNumMap, NumIdMap } from '../types.js';
+import type { AbstractNumFmtMap, AbstractNumMap, NumIdMap } from '../types.js';
 
 /**
  * Type guard checking whether a value is a non-null Record object.
@@ -69,8 +69,18 @@ function parseIntAttribute(node: unknown, ...attrKeys: string[]): number | undef
       if (typeof val === 'number') {
         return Math.trunc(val);
       }
-      const parsed = parseInt(String(val), 10);
-      return isNaN(parsed) ? undefined : parsed;
+      if (typeof val === 'string') {
+        const parsed = parseInt(val, 10);
+        return isNaN(parsed) ? undefined : parsed;
+      }
+      if (isRecord(val)) {
+        const innerVal = getProperty(val, '@_w:val', '@_val', '@w:val', 'val', '#text');
+        if (innerVal !== undefined && innerVal !== null) {
+          if (typeof innerVal === 'number') return Math.trunc(innerVal);
+          const parsed = parseInt(String(innerVal), 10);
+          return isNaN(parsed) ? undefined : parsed;
+        }
+      }
     }
   }
   return undefined;
@@ -89,36 +99,43 @@ export interface ExtractedNumberingMaps {
    * Mapping from compound key `"${abstractNumId}:${level}"` to list type (`bullet` or `ordered`).
    */
   abstractNumMap: AbstractNumMap;
+
+  /**
+   * Mapping from compound key `"${abstractNumId}:${level}"` to numbering format string (`w:numFmt @w:val`).
+   */
+  abstractNumFmtMap: AbstractNumFmtMap;
 }
 
 /**
  * Parses OOXML numbering XML (`word/numbering.xml`) and builds mapping tables for list resolution.
  *
- * Builds two maps:
+ * Builds three maps:
  * 1. `abstractNumMap`: Maps `"${abstractNumId}:${ilvl}"` to `'bullet'` or `'ordered'` based on
  *    the level's numbering format (`w:numFmt @w:val`). 'bullet' maps to `'bullet'`, all other
  *    formats (e.g. 'decimal', 'lowerLetter', 'upperLetter', 'lowerRoman', 'upperRoman') map to `'ordered'`.
- * 2. `numIdMap`: Maps numbering instance ID (`w:num @w:numId`) to its corresponding abstract
+ * 2. `abstractNumFmtMap`: Maps `"${abstractNumId}:${ilvl}"` to raw numFmt string.
+ * 3. `numIdMap`: Maps numbering instance ID (`w:num @w:numId`) to its corresponding abstract
  *    definition ID (`w:abstractNumId @w:val`).
  *
  * Gracefully handles empty, missing, or malformed XML by returning empty maps without throwing errors.
  *
  * @param numberingXml - Raw XML content from `word/numbering.xml`.
- * @returns An object containing `numIdMap` and `abstractNumMap`.
+ * @returns An object containing `numIdMap`, `abstractNumMap`, and `abstractNumFmtMap`.
  */
 export function extractNumberingMaps(numberingXml: string): ExtractedNumberingMaps {
   const numIdMap: NumIdMap = new Map();
   const abstractNumMap: AbstractNumMap = new Map();
+  const abstractNumFmtMap: AbstractNumFmtMap = new Map();
 
   if (typeof numberingXml !== 'string' || numberingXml.trim().length === 0) {
-    return { numIdMap, abstractNumMap };
+    return { numIdMap, abstractNumMap, abstractNumFmtMap };
   }
 
   let parsed: Record<string, unknown>;
   try {
     parsed = parseXml(numberingXml);
   } catch {
-    return { numIdMap, abstractNumMap };
+    return { numIdMap, abstractNumMap, abstractNumFmtMap };
   }
 
   const numberingRoot = getProperty(parsed, 'w:numbering', 'numbering');
@@ -134,7 +151,7 @@ export function extractNumberingMaps(numberingXml: string): ExtractedNumberingMa
       continue;
     }
 
-    const abstractNumId = parseIntAttribute(
+    let abstractNumId = parseIntAttribute(
       abstractNumNode,
       '@_w:abstractNumId',
       '@_abstractNumId',
@@ -142,44 +159,120 @@ export function extractNumberingMaps(numberingXml: string): ExtractedNumberingMa
       'abstractNumId',
       '@_w:val',
       '@_val',
+      '@w:val',
+      'val',
     );
 
     if (abstractNumId === undefined) {
+      for (const key of Object.keys(abstractNumNode)) {
+        if (key.toLowerCase().includes('abstractnumid')) {
+          const val = abstractNumNode[key];
+          const parsed = parseIntAttribute(val);
+          if (parsed !== undefined) {
+            abstractNumId = parsed;
+            break;
+          }
+        }
+      }
+    }
+
+    if (abstractNumId === undefined) {
+      console.warn('Warning: Could not extract abstractNumId from abstractNum node', abstractNumNode);
       continue;
     }
 
     // Process levels: <w:lvl w:ilvl="0"><w:numFmt w:val="bullet"/></w:lvl>
-    const lvlNodes = toArray<Record<string, unknown>>(
-      getProperty(abstractNumNode, 'w:lvl', 'lvl'),
-    );
+    const lvlRaw = getProperty(abstractNumNode, 'w:lvl', 'lvl');
+    let lvlNodes: Record<string, unknown>[] = [];
+    if (isRecord(lvlRaw) && !Array.isArray(lvlRaw)) {
+      const keys = Object.keys(lvlRaw);
+      const isIndexedByLvl = keys.length > 0 && keys.every((k) => /^\d+$/.test(k) || k === ':@');
+      if (isIndexedByLvl) {
+        for (const k of keys) {
+          if (k !== ':@' && isRecord(lvlRaw[k])) {
+            lvlNodes.push(lvlRaw[k] as Record<string, unknown>);
+          }
+        }
+      } else {
+        lvlNodes = [lvlRaw];
+      }
+    } else {
+      lvlNodes = toArray<Record<string, unknown>>(lvlRaw);
+    }
 
-    for (const lvlNode of lvlNodes) {
+    for (let lvlIdx = 0; lvlIdx < lvlNodes.length; lvlIdx++) {
+      const lvlNode = lvlNodes[lvlIdx];
       if (!isRecord(lvlNode)) {
         continue;
       }
 
-      const ilvl = parseIntAttribute(
+      let ilvl = parseIntAttribute(
         lvlNode,
         '@_w:ilvl',
         '@_ilvl',
         '@w:ilvl',
         'ilvl',
+        'w:ilvl',
         '@_w:val',
         '@_val',
+        '@w:val',
+        'val',
       );
 
       if (ilvl === undefined) {
-        continue;
+        const ilvlChild = getProperty(lvlNode, 'w:ilvl', 'ilvl');
+        if (ilvlChild !== undefined) {
+          ilvl = parseIntAttribute(ilvlChild, '@_w:val', '@_val', '@w:val', 'val', 'val');
+        }
+      }
+
+      if (ilvl === undefined) {
+        for (const key of Object.keys(lvlNode)) {
+          if (key.toLowerCase().includes('ilvl')) {
+            const val = lvlNode[key];
+            const parsed = parseIntAttribute(val, '@_w:val', '@_val', '@w:val', 'val');
+            if (parsed !== undefined) {
+              ilvl = parsed;
+              break;
+            }
+          }
+        }
+      }
+
+      if (ilvl === undefined) {
+        ilvl = lvlIdx;
       }
 
       // Check numFmt element: <w:numFmt w:val="bullet"/>
-      const numFmtNode = getProperty(lvlNode, 'w:numFmt', 'numFmt');
+      const numFmtNode = getProperty(lvlNode, 'w:numFmt', 'numFmt', '@_w:numFmt', '@_numFmt');
       let numFmtVal: unknown;
 
       if (isRecord(numFmtNode)) {
-        numFmtVal = getProperty(numFmtNode, '@_w:val', '@_val', '@w:val', 'val');
+        numFmtVal = getProperty(numFmtNode, '@_w:val', '@_val', '@w:val', 'val', '#text');
+        if (numFmtVal === undefined) {
+          for (const key of Object.keys(numFmtNode)) {
+            if (key.toLowerCase().includes('val')) {
+              numFmtVal = numFmtNode[key];
+              break;
+            }
+          }
+        }
       } else if (typeof numFmtNode === 'string' || typeof numFmtNode === 'number') {
         numFmtVal = numFmtNode;
+      }
+
+      if (numFmtVal === undefined) {
+        for (const key of Object.keys(lvlNode)) {
+          if (key.toLowerCase().includes('numfmt')) {
+            const candidate = lvlNode[key];
+            if (isRecord(candidate)) {
+              numFmtVal = getProperty(candidate, '@_w:val', '@_val', '@w:val', 'val', '#text');
+            } else {
+              numFmtVal = candidate;
+            }
+            if (numFmtVal !== undefined) break;
+          }
+        }
       }
 
       const numFmtStr =
@@ -189,6 +282,10 @@ export function extractNumberingMaps(numberingXml: string): ExtractedNumberingMa
 
       const listType: 'bullet' | 'ordered' = numFmtStr === 'bullet' ? 'bullet' : 'ordered';
       abstractNumMap.set(`${abstractNumId}:${ilvl}`, listType);
+      abstractNumFmtMap.set(
+        `${abstractNumId}:${ilvl}`,
+        numFmtStr || (listType === 'bullet' ? 'bullet' : 'decimal'),
+      );
     }
   }
 
@@ -202,7 +299,7 @@ export function extractNumberingMaps(numberingXml: string): ExtractedNumberingMa
       continue;
     }
 
-    const numId = parseIntAttribute(
+    let numId = parseIntAttribute(
       numNode,
       '@_w:numId',
       '@_numId',
@@ -210,7 +307,22 @@ export function extractNumberingMaps(numberingXml: string): ExtractedNumberingMa
       'numId',
       '@_w:val',
       '@_val',
+      '@w:val',
+      'val',
     );
+
+    if (numId === undefined) {
+      for (const key of Object.keys(numNode)) {
+        if (key.toLowerCase().includes('numid')) {
+          const val = numNode[key];
+          const parsed = parseIntAttribute(val);
+          if (parsed !== undefined) {
+            numId = parsed;
+            break;
+          }
+        }
+      }
+    }
 
     if (numId === undefined) {
       continue;
@@ -228,7 +340,21 @@ export function extractNumberingMaps(numberingXml: string): ExtractedNumberingMa
         'val',
         '@_w:abstractNumId',
         '@_abstractNumId',
+        '@w:abstractNumId',
+        'abstractNumId',
       );
+      if (abstractNumId === undefined) {
+        for (const key of Object.keys(abstractNumIdChild)) {
+          if (key.toLowerCase().includes('val') || key.toLowerCase().includes('abstractnumid')) {
+            const val = abstractNumIdChild[key];
+            const parsed = parseIntAttribute(val);
+            if (parsed !== undefined) {
+              abstractNumId = parsed;
+              break;
+            }
+          }
+        }
+      }
     } else if (abstractNumIdChild !== undefined) {
       abstractNumId = parseIntAttribute(abstractNumIdChild);
     } else {
@@ -241,6 +367,19 @@ export function extractNumberingMaps(numberingXml: string): ExtractedNumberingMa
       );
     }
 
+    if (abstractNumId === undefined) {
+      for (const key of Object.keys(numNode)) {
+        if (key.toLowerCase().includes('abstractnumid')) {
+          const val = numNode[key];
+          const parsed = parseIntAttribute(val, '@_w:val', '@_val', '@w:val', 'val');
+          if (parsed !== undefined) {
+            abstractNumId = parsed;
+            break;
+          }
+        }
+      }
+    }
+
     if (abstractNumId !== undefined) {
       numIdMap.set(numId, abstractNumId);
     }
@@ -249,5 +388,6 @@ export function extractNumberingMaps(numberingXml: string): ExtractedNumberingMa
   return {
     numIdMap,
     abstractNumMap,
+    abstractNumFmtMap,
   };
 }

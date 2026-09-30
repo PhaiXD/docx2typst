@@ -167,10 +167,48 @@ export function extractTables(bodyNode: Record<string, unknown>): DocxTable[] {
         const pNodes = toArray(getProperty(tcNode, 'w:p', 'p'));
         const paragraphs: Paragraph[] = pNodes.map((pNode) => extractParagraph(pNode));
 
+        // Extract text alignment from w:tcPr > w:jc @w:val OR from first paragraph's w:pPr > w:jc @w:val
+        let align: 'left' | 'center' | 'right' | undefined;
+        let jcNode: unknown;
+        if (isRecord(tcPr)) {
+          jcNode = getProperty(tcPr, 'w:jc', 'jc');
+        }
+        if (jcNode === undefined && pNodes.length > 0 && isRecord(pNodes[0])) {
+          const firstPPr = getProperty(pNodes[0], 'w:pPr', 'pPr');
+          if (isRecord(firstPPr)) {
+            jcNode = getProperty(firstPPr, 'w:jc', 'jc');
+          }
+        }
+
+        if (jcNode !== undefined) {
+          let jcVal: string | undefined;
+          if (isRecord(jcNode)) {
+            const val = getProperty(jcNode, '@_w:val', '@_val', '@w:val', 'val');
+            if (val !== undefined && val !== null) {
+              jcVal = String(val).toLowerCase().trim();
+            }
+          } else if (typeof jcNode === 'string') {
+            jcVal = jcNode.toLowerCase().trim();
+          }
+
+          if (jcVal !== undefined) {
+            if (jcVal === 'center') {
+              align = 'center';
+            } else if (jcVal === 'right') {
+              align = 'right';
+            } else if (jcVal === 'left' || jcVal === 'both' || jcVal === 'justify') {
+              align = 'left';
+            } else {
+              align = 'left';
+            }
+          }
+        }
+
         const cell: TableCell = {
           paragraphs,
           ...(columnSpan !== undefined ? { columnSpan } : {}),
           ...(isVerticalMerge ? { isVerticalMerge: true } : {}),
+          ...(align !== undefined ? { align } : {}),
         };
         cells.push(cell);
       }
