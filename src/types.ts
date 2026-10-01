@@ -388,6 +388,16 @@ export interface TableCell {
   vMerge?: 'restart' | 'continue';
 
   /**
+   * Borders applied to the cell directly.
+   */
+  borders?: {
+    top?: boolean;
+    bottom?: boolean;
+    left?: boolean;
+    right?: boolean;
+  };
+
+  /**
    * Cell vertical alignment in Typst ('top' | 'horizon' | 'bottom' | 'left' | 'center' | 'right').
    */
   align?: 'top' | 'horizon' | 'bottom' | 'left' | 'center' | 'right' | string;

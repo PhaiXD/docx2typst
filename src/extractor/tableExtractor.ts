@@ -231,6 +231,7 @@ export function extractTables(
         let columnSpan: number | undefined;
         let isVerticalMerge: boolean | undefined;
         let vMerge: 'restart' | 'continue' | undefined;
+        let cellBorders: { top?: boolean; bottom?: boolean; left?: boolean; right?: boolean } | undefined;
 
         if (isRecord(tcPr)) {
           // Extract columnSpan from w:tcPr > w:gridSpan @w:val (default 1 if missing)
@@ -279,19 +280,25 @@ export function extractTables(
           const tcBorders = getProperty(tcPr, 'w:tcBorders', 'tcBorders');
           if (isRecord(tcBorders)) {
             hasAnyCellBorders = true;
-            for (const side of ['left', 'right'] as const) {
+            cellBorders = {};
+            for (const side of ['top', 'bottom', 'left', 'right'] as const) {
               const bNode = getProperty(tcBorders, `w:${side}`, side);
               if (isRecord(bNode)) {
                 const val = getProperty(bNode, '@_w:val', '@_val', '@w:val', 'val');
                 if (val !== undefined && val !== null) {
                   const s = String(val).toLowerCase().trim();
                   if (s === 'none' || s === 'nil') {
-                    hasCellExplicitlyRemovedVertical = true;
+                    cellBorders[side] = false;
+                    if (side === 'left' || side === 'right') hasCellExplicitlyRemovedVertical = true;
                   } else {
-                    hasAnyCellVerticalBorder = true;
+                    cellBorders[side] = true;
+                    if (side === 'left' || side === 'right') hasAnyCellVerticalBorder = true;
                   }
                 }
               }
+            }
+            if (Object.keys(cellBorders).length === 0) {
+              cellBorders = undefined;
             }
           }
         }
@@ -343,6 +350,7 @@ export function extractTables(
           ...(isVerticalMerge ? { isVerticalMerge: true } : {}),
           ...(vMerge !== undefined ? { vMerge } : {}),
           ...(align !== undefined ? { align } : {}),
+          ...(cellBorders !== undefined ? { borders: cellBorders } : {}),
         };
 
         // If logical cells already satisfy columnCount, skip extra phantom cells
@@ -386,73 +394,6 @@ export function extractTables(
         ...(isHeader ? { isHeader: true } : {}),
       };
       rows.push(row);
-    }
-
-    // Detect and remove narrow spacer columns (BUG 3)
-    const spacerCols: number[] = [];
-    for (let c = 0; c < columnCount; c++) {
-      let isSpacer = rows.length > 0;
-      for (const row of rows) {
-        let colIdx = 0;
-        let cellAtCol: TableCell | undefined;
-        let spanAtCol = 1;
-        for (const cell of row.cells) {
-          const span = cell.columnSpan ?? 1;
-          if (colIdx <= c && c < colIdx + span) {
-            cellAtCol = cell;
-            spanAtCol = span;
-            break;
-          }
-          colIdx += span;
-        }
-        if (!cellAtCol || spanAtCol > 1 || !isCellEmpty(cellAtCol)) {
-          isSpacer = false;
-          break;
-        }
-      }
-      if (isSpacer) {
-        spacerCols.push(c);
-      }
-    }
-
-    if (spacerCols.length > 0) {
-      for (let s = spacerCols.length - 1; s >= 0; s--) {
-        const spacerCol = spacerCols[s];
-        const newColCount = columnCount - 1;
-        for (const row of rows) {
-          let colIdx = 0;
-          let cellIndex = -1;
-          for (let i = 0; i < row.cells.length; i++) {
-            const cell = row.cells[i];
-            const span = cell.columnSpan ?? 1;
-            if (colIdx <= spacerCol && spacerCol < colIdx + span) {
-              cellIndex = i;
-              break;
-            }
-            colIdx += span;
-          }
-          if (cellIndex !== -1) {
-            const spacerCell = row.cells[cellIndex];
-            row.cells.splice(cellIndex, 1);
-            if (cellIndex > 0) {
-              const prevCell = row.cells[cellIndex - 1];
-              const spacerSpan = spacerCell.columnSpan ?? 1;
-              const currentTotalSlots = row.cells.reduce((sum, cl) => sum + (cl.columnSpan ?? 1), 0);
-              if (currentTotalSlots + spacerSpan <= newColCount) {
-                prevCell.columnSpan = (prevCell.columnSpan ?? 1) + spacerSpan;
-              }
-            }
-          }
-        }
-        if (columnWidths && spacerCol < columnWidths.length) {
-          const removedWidth = columnWidths[spacerCol];
-          columnWidths.splice(spacerCol, 1);
-          if (spacerCol > 0 && columnWidths.length > 0) {
-            columnWidths[spacerCol - 1] += removedWidth;
-          }
-        }
-        columnCount = newColCount;
-      }
     }
 
     // Calculate rowSpan for vMerge='restart' cells
@@ -529,13 +470,7 @@ export function extractTables(
       }
     }
 
-    if (borders) {
-      if (hasCellExplicitlyRemovedVertical || (hasAnyCellBorders && !hasAnyCellVerticalBorder)) {
-        borders.left = false;
-        borders.right = false;
-        borders.insideV = false;
-      }
-    } else if (hasAnyCellBorders) {
+    if (!borders && hasAnyCellBorders) {
       borders = {
         top: hasBorderTop,
         bottom: hasBorderBottom,

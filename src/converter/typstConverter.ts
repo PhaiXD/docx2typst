@@ -268,11 +268,21 @@ export function applyIndentation(content: string, para: Paragraph): string {
  * @param options - Converter options.
  * @returns Converted Typst markup for the paragraph, or an empty string for blank paragraphs.
  */
+export interface CellContext {
+  isCell: boolean;
+  isFirstPara?: boolean;
+  isLastPara?: boolean;
+}
+
 function convertParagraphToTypst(
   para: Paragraph,
   options?: TypstConverterOptions,
-  isCell: boolean = false,
+  context?: CellContext | boolean,
 ): string {
+  const isCell = typeof context === 'object' ? context.isCell : (context || false);
+  const isFirstPara = typeof context === 'object' ? context.isFirstPara : false;
+  const isLastPara = typeof context === 'object' ? context.isLastPara : false;
+
   const hasImages = Array.isArray(para.images) && para.images.length > 0;
   const hasPageBreakRun = para.runs?.some((r) => r.pageBreak);
   if (para.isEmpty && !hasImages && !hasPageBreakRun) {
@@ -343,6 +353,8 @@ function convertParagraphToTypst(
         textContent = `#align(center)[${textContent}]`;
       } else if (para.align === 'right') {
         textContent = `#align(right)[${textContent}]`;
+      } else if (para.align === 'justify') {
+        textContent = `#par(justify: true)[${textContent}]`;
       }
     }
   }
@@ -357,11 +369,11 @@ function convertParagraphToTypst(
     }
   }
 
-  if (output.length > 0 && !isCell) {
-    if (para.hasBorderTop) {
+  if (output.length > 0) {
+    if (para.hasBorderTop && (!isCell || isFirstPara)) {
       output = `#line(length: 100%)\n${output}`;
     }
-    if (para.hasBorderBottom) {
+    if (para.hasBorderBottom && (!isCell || isLastPara)) {
       output = `${output}\n#line(length: 100%)`;
     }
   }
@@ -388,7 +400,11 @@ function convertParagraphToTypst(
  * @param options - Optional Typst converter configuration.
  * @returns Converted Typst cell markup string.
  */
-function convertCellToTypst(cell: TableCell, options?: TypstConverterOptions): string {
+function convertCellToTypst(
+  cell: TableCell,
+  tableBorders?: { top?: boolean; bottom?: boolean; left?: boolean; right?: boolean; insideH?: boolean; insideV?: boolean },
+  options?: TypstConverterOptions
+): string {
   if (cell.vMerge === 'continue' || (cell.isVerticalMerge && cell.vMerge === undefined && !cell.rowSpan)) {
     return '[]';
   }
@@ -396,13 +412,18 @@ function convertCellToTypst(cell: TableCell, options?: TypstConverterOptions): s
   const paraTexts: string[] = [];
 
   if (cell.paragraphs && cell.paragraphs.length > 0) {
-    for (const para of cell.paragraphs) {
-      if (para.isEmpty && (!para.images || para.images.length === 0)) {
-        continue;
-      }
-      const converted = convertParagraphToTypst(para, options, true);
+    for (let i = 0; i < cell.paragraphs.length; i++) {
+      const para = cell.paragraphs[i];
+
+      const converted = convertParagraphToTypst(para, options, {
+        isCell: true,
+        isFirstPara: i === 0,
+        isLastPara: i === cell.paragraphs.length - 1,
+      });
       if (converted.length > 0) {
         paraTexts.push(converted);
+      } else if (para.isEmpty) {
+        paraTexts.push('#v(1em)');
       }
     }
   }
@@ -421,6 +442,22 @@ function convertCellToTypst(cell: TableCell, options?: TypstConverterOptions): s
   }
   if (cell.align) {
     attrs.push(`align: ${cell.align}`);
+  }
+  
+  if (cell.borders) {
+    const strokeParts: string[] = [];
+    const getSide = (side: 'top'|'bottom'|'left'|'right', insideSide: 'insideH'|'insideV') => {
+      if (cell.borders![side] !== undefined) return cell.borders![side] ? '1pt' : 'none';
+      if (tableBorders) {
+        return (tableBorders[side] || tableBorders[insideSide]) ? '1pt' : 'none';
+      }
+      return '1pt';
+    };
+    strokeParts.push(`top: ${getSide('top', 'insideH')}`);
+    strokeParts.push(`bottom: ${getSide('bottom', 'insideH')}`);
+    strokeParts.push(`left: ${getSide('left', 'insideV')}`);
+    strokeParts.push(`right: ${getSide('right', 'insideV')}`);
+    attrs.push(`stroke: (${strokeParts.join(', ')})`);
   }
 
   if (attrs.length > 0) {
@@ -468,19 +505,7 @@ export function convertTableToTypst(
   ];
 
   const borders = table.borders;
-  const isHorizontalOnly =
-    borders !== undefined &&
-    (borders.top || borders.bottom) &&
-    !borders.left &&
-    !borders.right &&
-    !borders.insideV;
-
-  if (isHorizontalOnly) {
-    lines.push('  stroke: none,');
-    if (borders.top !== false) {
-      lines.push('  table.hline(y: 0),');
-    }
-  } else if (!borders) {
+  if (!borders) {
     lines.push('  stroke: 1pt,');
   } else {
     const hasV = borders.left || borders.right || borders.insideV;
@@ -489,8 +514,10 @@ export function convertTableToTypst(
       lines.push('  stroke: 1pt,');
     } else if (hasV && !hasH) {
       lines.push('  stroke: (x: 1pt, y: none),');
+    } else if (!hasV && hasH) {
+      lines.push('  stroke: (x: none, y: 1pt),');
     } else {
-      lines.push('  stroke: 1pt,');
+      lines.push('  stroke: none,');
     }
   }
 
@@ -505,7 +532,7 @@ export function convertTableToTypst(
         slotsUsed += cell.columnSpan ?? 1;
         continue;
       }
-      rowCells.push(convertCellToTypst(cell, options));
+      rowCells.push(convertCellToTypst(cell, table.borders, options));
       slotsUsed += cell.columnSpan ?? 1;
     }
     if (rowCells.length === 0) {
@@ -522,9 +549,7 @@ export function convertTableToTypst(
     }
   }
 
-  if (isHorizontalOnly && borders?.bottom !== false) {
-    lines.push('  table.hline(),');
-  }
+
 
   lines.push(')');
   let result = lines.join('\n');
@@ -590,117 +615,122 @@ export function convertDocxToTypst(
           ...(doc.tables || []).map((t) => ({ type: 'table' as const, table: t })),
         ];
 
-  interface SectionGroup {
-    items: BodyItem[];
-    columnCount: number;
-  }
+  let content = '';
+  let phase = 1; // 1: Title area (1-col), 2: Body (2-col)
+  let columnBuffer: string[] = [];
 
-  const sections: SectionGroup[] = [];
-  let currentGroupItems: BodyItem[] = [];
-
-  for (const item of items) {
-    currentGroupItems.push(item);
-    if (item.type === 'paragraph' && item.paragraph.sectionBreak) {
-      sections.push({
-        items: currentGroupItems,
-        columnCount: item.paragraph.sectionBreak.columnCount,
-      });
-      currentGroupItems = [];
+  const flushColumns = () => {
+    if (columnBuffer.length > 0) {
+      content += `#columns(2)[\n  ${columnBuffer.join('\n\n').split('\n').join('\n  ')}\n]\n\n`;
+      columnBuffer = [];
     }
-  }
+  };
 
-  if (currentGroupItems.length > 0 || sections.length === 0) {
-    const finalColumnCount =
-      doc.sections && doc.sections.length > 0
-        ? doc.sections[doc.sections.length - 1].columnCount
-        : 1;
-    sections.push({
-      items: currentGroupItems,
-      columnCount: finalColumnCount,
-    });
-  }
-
-  type RenderedItemEntry = BodyItem | { type: 'showRule' };
-  const renderedParts: string[] = [];
-  const filteredItems: RenderedItemEntry[] = [];
   let consecutiveBlankCount = 0;
-  let showColumnsEmitted = false;
-
-  const itemColCounts: number[] = [];
-  for (const sec of sections) {
-    for (let k = 0; k < sec.items.length; k++) {
-      itemColCounts.push(sec.columnCount);
-    }
-  }
 
   for (let i = 0; i < items.length; i++) {
     const item = items[i];
-    const colCount = itemColCounts[i] ?? 1;
 
+    let isBlank = false;
+    // Filter consecutive blank lines
     if (item.type === 'paragraph') {
-      const hasImages = Array.isArray(item.paragraph.images) && item.paragraph.images.length > 0;
-      const isHeading = !item.paragraph.listItem && getHeadingLevel(item.paragraph.style) !== null;
+      const para = item.paragraph;
+      const hasImages = Array.isArray(para.images) && para.images.length > 0;
+      const isHeading = !para.listItem && getHeadingLevel(para.style) !== null;
       const hasPageBreak = Boolean(
-        item.paragraph.pageBreakBefore ||
-          item.paragraph.sectionBreak?.pageBreak ||
-          item.paragraph.runs?.some((r) => r.pageBreak),
+        para.pageBreakBefore || para.sectionBreak?.pageBreak || para.runs?.some((r) => r.pageBreak),
       );
-      const isBlank =
+      isBlank =
         !isHeading &&
         !hasPageBreak &&
-        (Boolean(item.paragraph.isEmpty) ||
-          ((!item.paragraph.text || item.paragraph.text.trim().length === 0) && !hasImages));
+        (Boolean(para.isEmpty) || ((!para.text || para.text.trim().length === 0) && !hasImages));
 
       if (isBlank) {
         consecutiveBlankCount++;
         if (consecutiveBlankCount > 1) {
           continue;
         }
-        renderedParts.push('');
-        filteredItems.push(item);
       } else {
         consecutiveBlankCount = 0;
-        if (!showColumnsEmitted && colCount > 1) {
-          renderedParts.push(`#show: rest => columns(${colCount}, rest)`);
-          filteredItems.push({ type: 'showRule' });
-          showColumnsEmitted = true;
-        }
-        renderedParts.push(convertParagraphToTypst(item.paragraph, options));
-        filteredItems.push(item);
       }
     } else {
       consecutiveBlankCount = 0;
-      if (!showColumnsEmitted && colCount > 1) {
-        renderedParts.push(`#show: rest => columns(${colCount}, rest)`);
-        filteredItems.push({ type: 'showRule' });
-        showColumnsEmitted = true;
-      }
-      renderedParts.push(convertTableToTypst(item.table, options));
-      filteredItems.push(item);
     }
-  }
 
-  let content = '';
-  for (let i = 0; i < renderedParts.length; i++) {
-    if (i > 0) {
-      if (!paragraphSpacing) {
-        content += '\n';
-      } else {
-        const prevItem = filteredItems[i - 1];
-        const currItem = filteredItems[i];
-        const isPrevList =
-          prevItem.type === 'paragraph' && prevItem.paragraph.listItem !== undefined;
-        const isCurrList =
-          currItem.type === 'paragraph' && currItem.paragraph.listItem !== undefined;
-        if (isPrevList && isCurrList) {
-          content += '\n';
-        } else {
-          content += '\n\n';
+    if (phase === 1) {
+      if (item.type === 'table') {
+        content += convertTableToTypst(item.table, options) + '\n\n';
+        phase = 2; // Everything after the first table (Abstract) is in Phase 2
+      } else if (item.type === 'paragraph') {
+        const paraTypst = convertParagraphToTypst(item.paragraph, options);
+        if (paraTypst.trim().length > 0 || paraTypst.includes('#pagebreak') || (isBlank && consecutiveBlankCount === 1)) {
+          content += paraTypst + '\n\n';
+        }
+      }
+    } else {
+      let isFullWidth = false;
+
+      if (item.type === 'table') {
+        isFullWidth = true;
+      } else if (item.type === 'paragraph') {
+        const para = item.paragraph;
+        const text = (para.runs || []).map((r) => r.text || '').join('').trim();
+        const hasImages = Array.isArray(para.images) && para.images.length > 0;
+
+        if (hasImages) {
+          isFullWidth = true;
+        } else if (text.startsWith('Table ')) {
+          // Look ahead for table
+          const nextItem = items[i + 1];
+          if (nextItem && nextItem.type === 'table') {
+            isFullWidth = true;
+          }
+        } else if (text.startsWith('Figure ')) {
+          // Look behind for image
+          const prevItem = items[i - 1];
+          if (prevItem && prevItem.type === 'paragraph') {
+            const prevPara = prevItem.paragraph;
+            if (Array.isArray(prevPara.images) && prevPara.images.length > 0) {
+              isFullWidth = true;
+            }
+          }
+        }
+      }
+
+      if (isFullWidth) {
+        flushColumns();
+        if (item.type === 'table') {
+          content += convertTableToTypst(item.table, options) + '\n\n';
+        } else if (item.type === 'paragraph') {
+          content += convertParagraphToTypst(item.paragraph, options) + '\n\n';
+        }
+      } else if (item.type === 'paragraph') {
+        let paraTypst = convertParagraphToTypst(item.paragraph, options);
+        
+        // Ensure pagebreaks happen OUTSIDE the column block!
+        if (paraTypst.startsWith('#pagebreak()\n\n')) {
+          flushColumns();
+          content += '#pagebreak()\n\n';
+          paraTypst = paraTypst.substring('#pagebreak()\n\n'.length);
+        } else if (paraTypst.startsWith('#pagebreak()\n')) {
+          flushColumns();
+          content += '#pagebreak()\n\n';
+          paraTypst = paraTypst.substring('#pagebreak()\n'.length);
+        } else if (paraTypst.startsWith('#pagebreak()')) {
+          flushColumns();
+          content += '#pagebreak()\n\n';
+          paraTypst = paraTypst.substring('#pagebreak()'.length);
+        }
+        
+        if (paraTypst.trim().length > 0 || (isBlank && consecutiveBlankCount === 1)) {
+          columnBuffer.push(paraTypst);
         }
       }
     }
-    content += renderedParts[i];
   }
+
+  flushColumns();
+  content = content.trimEnd();
 
   if (options?.includeHeader) {
     content = `// Generated by docx2typst\n\n${content}`;

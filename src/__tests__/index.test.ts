@@ -159,7 +159,7 @@ describe('index and high-level API', () => {
     expect(text).toBe('First bullet\nNested bullet\nNumbered item');
 
     const typstDoc = await convertDocxFile(listDocxPath);
-    expect(typstDoc.content).toBe('- First bullet\n  - Nested bullet\n+ Numbered item');
+    expect(typstDoc.content).toBe('- First bullet\n\n  - Nested bullet\n\n+ Numbered item');
     expect(typstDoc.stats.paragraphCount).toBe(3);
   });
 

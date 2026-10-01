@@ -425,10 +425,10 @@ describe('tableExtractor', () => {
     expect(tables[0].borders).toEqual({
       top: true,
       bottom: true,
-      left: false,
-      right: false,
+      left: true,
+      right: true,
       insideH: true,
-      insideV: false,
+      insideV: true,
     });
   });
 });

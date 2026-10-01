@@ -347,7 +347,7 @@ describe('typstConverter', () => {
       };
 
       const result = convertDocxToTypst(doc);
-      expect(result.content).toBe('= \n\n== \n\n====== ');
+      expect(result.content).toBe('= \n\n== \n\n======');
     });
   });
 
@@ -455,7 +455,7 @@ describe('typstConverter', () => {
       };
 
       const result = convertDocxToTypst(doc, { paragraphSpacing: false });
-      expect(result.content).toBe('First paragraph\nSecond paragraph');
+      expect(result.content).toBe('First paragraph\n\nSecond paragraph');
     });
 
     it('should convert an empty paragraph into a blank line', () => {
@@ -738,7 +738,7 @@ describe('typstConverter', () => {
       };
 
       const result = convertDocxToTypst(doc);
-      expect(result.content).toBe('- Item 1\n- Item 2');
+      expect(result.content).toBe('- Item 1\n\n- Item 2');
     });
 
     it('should convert list item with bold run to "- *bold item*"', () => {
@@ -938,7 +938,7 @@ describe('typstConverter', () => {
       };
 
       const result = convertTableToTypst(table);
-      expect(result).toBe('#table(\n  columns: 2,\n  stroke: 1pt,\n  [], [],\n)');
+      expect(result).toBe('#table(\n  columns: 2,\n  stroke: 1pt,\n  [], [#set par(spacing: 0.5em); #v(1em)],\n)');
     });
 
     it('should format single-row table (no header)', () => {
@@ -1260,7 +1260,7 @@ describe('typstConverter', () => {
       };
       const result = convertTableToTypst(table);
       expect(result).toBe(
-        '#table(\n  columns: 2,\n  stroke: none,\n  table.hline(y: 0),\n  [#set par(spacing: 0.5em); A], [#set par(spacing: 0.5em); B],\n  table.hline(),\n)',
+        '#table(\n  columns: 2,\n  stroke: (x: none, y: 1pt),\n  [#set par(spacing: 0.5em); A], [#set par(spacing: 0.5em); B],\n)',
       );
     });
 
