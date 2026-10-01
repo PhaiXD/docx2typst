@@ -186,6 +186,11 @@ export interface RawXmlContent {
   imageMap?: Map<string, DocxImage>;
 
   /**
+   * Map of relationship IDs to hyperlink target URLs.
+   */
+  hyperlinkMap?: Map<string, string>;
+
+  /**
    * The raw JSZip archive instance, stored as unknown to decouple types from JSZip.
    */
   zipInstance?: unknown;
@@ -219,6 +224,16 @@ export interface TextRun {
    * The text color in hex format (e.g. 'ff0000', '0000ff').
    */
   color?: string;
+
+  /**
+   * The highlight color for this run (e.g. "yellow", "cyan").
+   */
+  highlight?: string;
+
+  /**
+   * The target URL if this run is part of a hyperlink.
+   */
+  linkTarget?: string;
 
   /**
    * Whether this run contains an inline page break (`w:br w:type="page"`).

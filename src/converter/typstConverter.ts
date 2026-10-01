@@ -104,8 +104,14 @@ function convertRunToTypst(run: TextRun, escape: boolean = true): string {
   if (run.underline) {
     formatted = `#underline[${formatted}]`;
   }
+  if (run.highlight) {
+    formatted = `#highlight(fill: rgb("${run.highlight}"))[${formatted}]`;
+  }
   if (run.color) {
     formatted = `#text(fill: rgb("${run.color}"))[${formatted}]`;
+  }
+  if (run.linkTarget) {
+    formatted = `#link("${run.linkTarget}")[${formatted}]`;
   }
 
   return `${pageBreakMarkup}${horizontalLineMarkup}${leadingWs}${formatted}${trailingWs}`;

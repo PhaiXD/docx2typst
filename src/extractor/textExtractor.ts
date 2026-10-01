@@ -219,6 +219,7 @@ function extractRun(
   imageMap?: Map<string, DocxImage>,
   paragraphImages?: DocxImage[],
   defaultColor?: string,
+  hyperlinkMap?: Map<string, string>,
 ): TextRun | null {
   if (!isRecord(rNode)) {
     return null;
@@ -232,6 +233,8 @@ function extractRun(
   let italic: boolean | undefined;
   let underline: boolean | undefined;
   let color: string | undefined;
+  let highlight: string | undefined;
+  let linkTarget: string | undefined;
 
   if (rPr) {
     const bNode = getProperty(rPr, 'w:b', 'b');
@@ -260,6 +263,38 @@ function extractRun(
       }
     } else if (defaultColor) {
       color = defaultColor;
+    }
+
+    const highlightNode = getProperty(rPr, 'w:highlight', 'highlight');
+    if (isRecord(highlightNode)) {
+      const hlVal = getProperty(highlightNode, '@_w:val', '@_val', '@w:val', 'val');
+      if (hlVal !== undefined && hlVal !== 'none') {
+        const ooxmlHighlightMap: Record<string, string> = {
+          black: '000000', blue: '0000FF', cyan: '00FFFF', green: '00FF00',
+          magenta: 'FF00FF', red: 'FF0000', yellow: 'FFFF00', white: 'FFFFFF',
+          darkBlue: '000080', darkCyan: '008080', darkGreen: '008000',
+          darkMagenta: '800080', darkRed: '800000', darkYellow: '808000',
+          darkGray: '808080', lightGray: 'C0C0C0'
+        };
+        const colorName = String(hlVal);
+        highlight = ooxmlHighlightMap[colorName] || colorName;
+      }
+    }
+
+    const shdNode = getProperty(rPr, 'w:shd', 'shd');
+    if (!highlight && isRecord(shdNode)) {
+      const shdFill = getProperty(shdNode, '@_w:fill', '@_fill', '@w:fill', 'fill');
+      if (shdFill !== undefined && shdFill !== 'auto') {
+        highlight = String(shdFill).padStart(6, '0');
+      }
+    }
+
+    const linkNode = getProperty(rPr, 'w:linkTarget', 'linkTarget');
+    if (isRecord(linkNode)) {
+      const linkId = String(getProperty(linkNode, '@_w:val', '@_val', '@w:val', 'val'));
+      if (linkId && hyperlinkMap?.has(linkId)) {
+        linkTarget = hyperlinkMap.get(linkId);
+      }
     }
   } else if (defaultColor) {
     color = defaultColor;
@@ -321,6 +356,8 @@ function extractRun(
     ...(italic ? { italic: true } : {}),
     ...(underline ? { underline: true } : {}),
     ...(color ? { color } : {}),
+    ...(highlight ? { highlight } : {}),
+    ...(linkTarget ? { linkTarget } : {}),
     ...(pageBreak ? { pageBreak: true } : {}),
     ...(horizontalLine ? { horizontalLine: true } : {}),
   };
@@ -343,13 +380,14 @@ function extractRunsFromContainer(
   imageMap?: Map<string, DocxImage>,
   paragraphImages?: DocxImage[],
   defaultColor?: string,
+  hyperlinkMap?: Map<string, string>,
 ): TextRun[] {
   const runs: TextRun[] = [];
 
   // Direct runs (w:r)
   const directRuns = toArray(getProperty(container, 'w:r', 'r'));
   for (const rNode of directRuns) {
-    const run = extractRun(rNode, imageMap, paragraphImages, defaultColor);
+    const run = extractRun(rNode, imageMap, paragraphImages, defaultColor, hyperlinkMap);
     if (run !== null) {
       runs.push(run);
     }
@@ -369,7 +407,7 @@ function extractRunsFromContainer(
               if (pIdx > 0 && runs.length > 0) {
                 runs.push({ text: '\n' });
               }
-              runs.push(...extractRunsFromContainer(p, imageMap, paragraphImages));
+              runs.push(...extractRunsFromContainer(p, imageMap, paragraphImages, undefined, hyperlinkMap));
             }
           }
         }
@@ -383,7 +421,7 @@ function extractRunsFromContainer(
   );
   for (const hyperlink of hyperlinks) {
     if (isRecord(hyperlink)) {
-      runs.push(...extractRunsFromContainer(hyperlink, imageMap, paragraphImages, defaultColor));
+      runs.push(...extractRunsFromContainer(hyperlink, imageMap, paragraphImages, defaultColor, hyperlinkMap));
     }
   }
 
@@ -401,7 +439,7 @@ function extractRunsFromContainer(
           if (pIdx > 0 && runs.length > 0) {
             runs.push({ text: '\n' });
           }
-          runs.push(...extractRunsFromContainer(p, imageMap, paragraphImages));
+          runs.push(...extractRunsFromContainer(p, imageMap, paragraphImages, undefined, hyperlinkMap));
         }
       }
     }
@@ -608,6 +646,7 @@ export function extractParagraph(
   options?: DocxParserOptions,
   imageMap?: Map<string, DocxImage>,
   styleMap?: Map<string, DocxStyleInfo>,
+  hyperlinkMap?: Map<string, string>,
 ): Paragraph {
   if (!isRecord(pNode)) {
     return {
@@ -908,7 +947,7 @@ export function extractParagraph(
   }
 
   const paragraphImages: DocxImage[] = [];
-  const runs = extractRunsFromContainer(pNode, imageMap, paragraphImages, defaultColor);
+  const runs = extractRunsFromContainer(pNode, imageMap, paragraphImages, defaultColor, hyperlinkMap);
   if (defaultColor) {
     for (const run of runs) {
       if (!run.color && run.text && run.text.trim().length > 0) {
@@ -958,6 +997,7 @@ export function extractText(
   rawXml: string,
   options?: DocxParserOptions,
   imageMap?: Map<string, DocxImage>,
+  hyperlinkMap?: Map<string, string>,
 ): DocxDocument {
   const parsed = parseXml(rawXml);
 
@@ -1033,7 +1073,7 @@ export function extractText(
 
         if (tagName === 'w:p' || tagName === 'p') {
           if (pIndex < pNodes.length) {
-            const para = extractParagraph(pNodes[pIndex++], options, imageMap, styleMap);
+            const para = extractParagraph(pNodes[pIndex++], options, imageMap, styleMap, hyperlinkMap);
             orderedParagraphs.push(para);
             bodyItems.push({ type: 'paragraph', paragraph: para });
           }
@@ -1053,7 +1093,7 @@ export function extractText(
             if (isRecord(sdtContent)) {
               const sdtPNodes = toArray(getProperty(sdtContent, 'w:p', 'p'));
               for (const sdtP of sdtPNodes) {
-                const para = extractParagraph(sdtP, options, imageMap, styleMap);
+                const para = extractParagraph(sdtP, options, imageMap, styleMap, hyperlinkMap);
                 orderedParagraphs.push(para);
                 bodyItems.push({ type: 'paragraph', paragraph: para });
               }
@@ -1073,7 +1113,7 @@ export function extractText(
 
       // Append any remaining paragraphs or tables if not visited in bodyChildren
       while (pIndex < pNodes.length) {
-        const para = extractParagraph(pNodes[pIndex++], options, imageMap, styleMap);
+        const para = extractParagraph(pNodes[pIndex++], options, imageMap, styleMap, hyperlinkMap);
         orderedParagraphs.push(para);
         bodyItems.push({ type: 'paragraph', paragraph: para });
       }
@@ -1094,7 +1134,7 @@ export function extractText(
 
   if (!preserveOrderSuccess) {
     orderedParagraphs = pNodes.map((pNode) =>
-      extractParagraph(pNode, options, imageMap, styleMap),
+      extractParagraph(pNode, options, imageMap, styleMap, hyperlinkMap),
     );
     orderedTables = isRecord(bodyObj) ? extractTables(bodyObj, options, imageMap, styleMap) : [];
     bodyItems = [

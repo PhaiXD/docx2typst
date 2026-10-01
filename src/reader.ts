@@ -238,6 +238,7 @@ export async function readDocxFile(filePath: string): Promise<RawXmlContent> {
 
   // Parse relationships XML for image parts and construct imageMap
   const imageMap = new Map<string, DocxImage>();
+  const hyperlinkMap = new Map<string, string>();
   if (relationshipsXml) {
     const rels = parseRelationshipsForImages(relationshipsXml);
     for (const [relationshipId, { target, type }] of rels.entries()) {
@@ -255,6 +256,8 @@ export async function readDocxFile(filePath: string): Promise<RawXmlContent> {
             mimeType,
           });
         }
+      } else if (type.endsWith('/hyperlink')) {
+        hyperlinkMap.set(relationshipId, target);
       }
     }
   }
@@ -265,6 +268,7 @@ export async function readDocxFile(filePath: string): Promise<RawXmlContent> {
     ...(numberingXml !== undefined ? { numberingXml } : {}),
     ...(stylesXml !== undefined ? { stylesXml } : {}),
     imageMap,
+    hyperlinkMap,
     zipInstance: zip as unknown,
   };
 }

@@ -71,9 +71,9 @@
 
 - #text(fill: rgb("ff0000"))[Text Color]
 
-- #text(fill: rgb("434343"))[Highlight]
+- #text(fill: rgb("434343"))[#highlight(fill: rgb("00FF00"))[Highlight]]
 
-- #text(fill: rgb("434343"))[Link] #text(fill: rgb("1155cc"))[#underline[docx2typst]]
+- #text(fill: rgb("434343"))[Link] docx2typst
 
 #[#set par(justify: true);
 == 4. Praesent auctor

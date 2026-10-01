@@ -35,7 +35,21 @@ export function parseXml(xmlString: string): Record<string, unknown> {
     throw new DocxParseError('Invalid XML input: expected a non-empty string.');
   }
 
-  const validation = XMLValidator.validate(xmlString);
+  // Pre-process XML to flatten <w:hyperlink> wrappers.
+  // Because fast-xml-parser does not preserve order between different element tags
+  // (like <w:r> and <w:hyperlink>), text runs inside hyperlinks would be pushed out of order.
+  // By flattening them and injecting the relationship ID into the run properties,
+  // we ensure all <w:r> remain in their original sequence.
+  let processedXml = xmlString.replace(
+    /<w:hyperlink[^>]*r:id="([^"]+)"[^>]*>(.*?)<\/w:hyperlink>/gs,
+    (match, rId, content) => {
+      return content.replace(/<w:r(?: [^>]+)?>/g, (rTag: string) => {
+        return rTag + `<w:rPr><w:linkTarget w:val="${rId}"/></w:rPr>`;
+      });
+    }
+  );
+
+  const validation = XMLValidator.validate(processedXml);
   if (validation !== true) {
     const errorMsg =
       typeof validation === 'object' && validation.err
@@ -45,7 +59,7 @@ export function parseXml(xmlString: string): Record<string, unknown> {
   }
 
   try {
-    const result: unknown = parser.parse(xmlString);
+    const result: unknown = parser.parse(processedXml);
 
     if (result === null || typeof result !== 'object') {
       throw new DocxParseError('Failed to parse XML: output is not a valid object.');

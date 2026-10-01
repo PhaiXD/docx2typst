@@ -102,7 +102,7 @@ export async function convertDocxToText(
   options?: DocxParserOptions,
 ): Promise<string> {
   const rawContent = await readDocxFile(filePath);
-  let document = extractText(rawContent.documentXml, options, rawContent.imageMap);
+  let document = extractText(rawContent.documentXml, options, rawContent.imageMap, rawContent.hyperlinkMap);
   if (rawContent.numberingXml) {
     const { numIdMap, abstractNumMap, abstractNumFmtMap } = extractNumberingMaps(
       rawContent.numberingXml,
@@ -151,7 +151,7 @@ export async function convertDocxFile(
   options?: TypstConverterOptions,
 ): Promise<TypstDocument> {
   const rawContent = await readDocxFile(filePath);
-  let document = extractText(rawContent.documentXml, undefined, rawContent.imageMap);
+  let document = extractText(rawContent.documentXml, undefined, rawContent.imageMap, rawContent.hyperlinkMap);
   if (rawContent.numberingXml) {
     const { numIdMap, abstractNumMap, abstractNumFmtMap } = extractNumberingMaps(
       rawContent.numberingXml,
