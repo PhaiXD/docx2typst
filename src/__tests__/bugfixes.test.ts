@@ -17,6 +17,7 @@ import {
   convertDocxToTypst,
   convertTableToTypst,
   extractNumberingMaps,
+  extractStyleMap,
   extractText,
   parseXmlPreserveOrder,
   resolveListItems,
@@ -158,7 +159,7 @@ describe('Critical Bug Fixes Verification', () => {
       expect(doc.sections?.[0].columnCount).toBe(3);
     });
 
-    it('should wrap 2-column sections in #columns(2) with 2-space indentation', () => {
+    it('should emit #show: rest => columns(2, rest) for 2-column sections', () => {
       const doc: DocxDocument = {
         paragraphs: [
           {
@@ -180,11 +181,11 @@ describe('Critical Bug Fixes Verification', () => {
 
       const result = convertDocxToTypst(doc);
       expect(result.content).toBe(
-        '#columns(2)[\n  First column content\n\n  Second column content\n]\n\nSingle column body paragraph',
+        '#show: rest => columns(2, rest)\n\nFirst column content\n\nSecond column content\n\nSingle column body paragraph',
       );
     });
 
-    it('should wrap document in #columns when final section has columnCount > 1', () => {
+    it('should emit #show: rest => columns when final section has columnCount > 1', () => {
       const doc: DocxDocument = {
         paragraphs: [
           {
@@ -197,7 +198,7 @@ describe('Critical Bug Fixes Verification', () => {
       };
 
       const result = convertDocxToTypst(doc);
-      expect(result.content).toBe('#columns(2)[\n  Intro in 2 columns\n]');
+      expect(result.content).toBe('#show: rest => columns(2, rest)\n\nIntro in 2 columns');
     });
   });
 
@@ -314,7 +315,7 @@ describe('Critical Bug Fixes Verification', () => {
   // BUG 4: Tables Missing Borders and Incorrect Column Span
   // ==============================================================
   describe('BUG 4: Tables stroke, colspan, alignment, and vertical merge', () => {
-    it('should extract cell alignment from w:tcPr > w:jc or paragraph w:jc', () => {
+    it('should extract cell vertical alignment from w:tcPr > w:vAlign and preserve paragraph alignment', () => {
       const xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
   <w:body>
@@ -322,11 +323,14 @@ describe('Critical Bug Fixes Verification', () => {
       <w:tr>
         <w:tc>
           <w:tcPr>
-            <w:jc w:val="center"/>
+            <w:vAlign w:val="center"/>
           </w:tcPr>
           <w:p><w:r><w:t>Centered Cell</w:t></w:r></w:p>
         </w:tc>
         <w:tc>
+          <w:tcPr>
+            <w:vAlign w:val="bottom"/>
+          </w:tcPr>
           <w:p>
             <w:pPr>
               <w:jc w:val="right"/>
@@ -342,8 +346,9 @@ describe('Critical Bug Fixes Verification', () => {
       const doc = extractText(xml);
       expect(doc.tables).toHaveLength(1);
       const cells = doc.tables![0].rows[0].cells;
-      expect(cells[0].align).toBe('center');
-      expect(cells[1].align).toBe('right');
+      expect(cells[0].align).toBe('horizon');
+      expect(cells[1].align).toBe('bottom');
+      expect(cells[1].paragraphs[0].align).toBe('right');
     });
 
     it('should convert table with stroke: 1pt, colspan, align, and vertical merge', () => {
@@ -385,8 +390,8 @@ describe('Critical Bug Fixes Verification', () => {
         '#table(\n' +
           '  columns: 3,\n' +
           '  stroke: 1pt,\n' +
-          '  table.cell(colspan: 2, align: center)[Spanned 2 Center], table.cell(align: right)[Right],\n' +
-          '  [], [Normal], [],\n' +
+          '  table.cell(colspan: 2, align: center)[#set par(spacing: 0.5em); Spanned 2 Center], table.cell(align: right)[#set par(spacing: 0.5em); Right],\n' +
+          '  [], [#set par(spacing: 0.5em); Normal], [],\n' +
           ')',
       );
     });
@@ -427,7 +432,7 @@ describe('Critical Bug Fixes Verification', () => {
 
       const typst = convertDocxToTypst(doc);
       expect(typst.content).toBe(
-        'Paragraph 1\n\n#table(\n  columns: 1,\n  stroke: 1pt,\n  [Table Cell],\n)\n\nParagraph 2',
+        'Paragraph 1\n\n#table(\n  columns: 1,\n  stroke: 1pt,\n  [#set par(spacing: 0.5em); Table Cell],\n)\n\nParagraph 2',
       );
     });
 
@@ -567,7 +572,7 @@ describe('Critical Bug Fixes Verification', () => {
   // REAL-WORLD FIXES (test.docx issues)
   // ==============================================================
   describe('BUG 1 & 6: Tables not wrapped in #columns() and conservative column detection', () => {
-    it('should NOT wrap sections containing tables in #columns()', () => {
+    it('should emit tables outside #columns() and body paragraphs with #show: rest => columns(2, rest)', () => {
       const doc: DocxDocument = {
         paragraphs: [
           { text: 'Table Caption', runs: [{ text: 'Table Caption' }] },
@@ -615,11 +620,12 @@ describe('Critical Bug Fixes Verification', () => {
       };
 
       const result = convertDocxToTypst(doc);
-      expect(result.content).not.toContain('#columns(');
       expect(result.content).toContain('#table(');
+      expect(result.content).toContain('#show: rest => columns(2, rest)');
+      expect(result.content).toContain('After Table Note');
     });
 
-    it('should wrap sections in #columns(N) when section contains ONLY paragraphs with content', () => {
+    it('should emit #show: rest => columns(N, rest) when section contains ONLY paragraphs with content', () => {
       const doc: DocxDocument = {
         paragraphs: [
           { text: 'Multi-column paragraph 1', runs: [{ text: 'Multi-column paragraph 1' }] },
@@ -640,7 +646,7 @@ describe('Critical Bug Fixes Verification', () => {
       };
 
       const result = convertDocxToTypst(doc);
-      expect(result.content).toContain('#columns(2)[');
+      expect(result.content).toContain('#show: rest => columns(2, rest)');
       expect(result.content).toContain('Multi-column paragraph 1');
     });
 
@@ -684,7 +690,7 @@ describe('Critical Bug Fixes Verification', () => {
 
       const result = convertTableToTypst(table);
       expect(result).toBe(
-        '#table(\n  columns: 4,\n  stroke: 1pt,\n  [], table.cell(colspan: 2)[Anemia], [],\n)',
+        '#table(\n  columns: 4,\n  stroke: 1pt,\n  [], table.cell(colspan: 2)[#set par(spacing: 0.5em); Anemia], [],\n)',
       );
     });
 
@@ -786,6 +792,462 @@ describe('Critical Bug Fixes Verification', () => {
 
       const result = convertDocxToTypst(doc);
       expect(result.content).toBe('Start paragraph\n\n\n\nEnd paragraph');
+    });
+  });
+
+  // ==============================================================
+  // REMAINING 8 FIXES VERIFICATION
+  // ==============================================================
+  describe('FIX 1: Paragraph text alignment (center/right)', () => {
+    it('should extract w:jc center and right alignment from paragraph XML', () => {
+      const xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>
+    <w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:t>Centered text</w:t></w:r></w:p>
+    <w:p><w:pPr><w:jc w:val="right"/></w:pPr><w:r><w:t>Right text</w:t></w:r></w:p>
+    <w:p><w:pPr><w:jc w:val="both"/></w:pPr><w:r><w:t>Justified text</w:t></w:r></w:p>
+    <w:p><w:pPr><w:jc w:val="left"/></w:pPr><w:r><w:t>Left text</w:t></w:r></w:p>
+  </w:body>
+</w:document>`;
+      const doc = extractText(xml);
+      expect(doc.paragraphs[0].align).toBe('center');
+      expect(doc.paragraphs[1].align).toBe('right');
+      expect(doc.paragraphs[2].align).toBe('justify');
+      expect(doc.paragraphs[3].align).toBeUndefined();
+    });
+
+    it('should wrap centered and right-aligned paragraphs in #align(...)', () => {
+      const doc: DocxDocument = {
+        paragraphs: [
+          { text: 'Centered Title', runs: [{ text: 'Centered Title' }], align: 'center' },
+          { text: 'Right Note', runs: [{ text: 'Right Note' }], align: 'right' },
+          { text: 'Justified Body', runs: [{ text: 'Justified Body' }], align: 'justify' },
+        ],
+        text: 'Centered Title\nRight Note\nJustified Body',
+      };
+      const result = convertDocxToTypst(doc);
+      expect(result.content).toContain('#align(center)[Centered Title]');
+      expect(result.content).toContain('#align(right)[Right Note]');
+      expect(result.content).toContain('Justified Body');
+      expect(result.content).not.toContain('#align(justify)');
+    });
+
+    it('should wrap headings in #align(center)[= Heading] when center-aligned', () => {
+      const doc: DocxDocument = {
+        paragraphs: [
+          { text: 'Section Heading', runs: [{ text: 'Section Heading' }], style: 'Heading 1', align: 'center' },
+        ],
+        text: 'Section Heading',
+      };
+      const result = convertDocxToTypst(doc);
+      expect(result.content).toBe('#align(center)[= Section Heading]');
+    });
+
+    it('should not apply alignment wrapper to list items', () => {
+      const doc: DocxDocument = {
+        paragraphs: [
+          {
+            text: 'List item',
+            runs: [{ text: 'List item' }],
+            align: 'center',
+            listItem: { numId: 1, level: 0, abstractNumId: 1, listType: 'bullet' },
+          },
+        ],
+        text: 'List item',
+      };
+      const result = convertDocxToTypst(doc);
+      expect(result.content).toBe('- List item');
+      expect(result.content).not.toContain('#align');
+    });
+  });
+
+  describe('FIX 5: Horizontal separator lines (paragraph borders)', () => {
+    it('should extract top and bottom paragraph borders from w:pBdr', () => {
+      const xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>
+    <w:p>
+      <w:pPr>
+        <w:pBdr>
+          <w:top w:val="single"/>
+          <w:bottom w:val="single"/>
+        </w:pBdr>
+      </w:pPr>
+      <w:r><w:t>Bordered Paragraph</w:t></w:r>
+    </w:p>
+  </w:body>
+</w:document>`;
+      const doc = extractText(xml);
+      expect(doc.paragraphs[0].hasBorderTop).toBe(true);
+      expect(doc.paragraphs[0].hasBorderBottom).toBe(true);
+    });
+
+    it('should emit #line(length: 100%) for paragraph borders in Typst output', () => {
+      const doc: DocxDocument = {
+        paragraphs: [
+          {
+            text: 'Abstract Header',
+            runs: [{ text: 'Abstract Header' }],
+            hasBorderTop: true,
+            hasBorderBottom: true,
+          },
+        ],
+        text: 'Abstract Header',
+      };
+      const result = convertDocxToTypst(doc);
+      expect(result.content).toBe('#line(length: 100%)\nAbstract Header\n#line(length: 100%)');
+    });
+  });
+
+  describe('FIX 6: Cell paragraph delimiter', () => {
+    it('should separate paragraphs within a table cell with double newlines', () => {
+      const doc: DocxDocument = {
+        paragraphs: [],
+        tables: [
+          {
+            columnCount: 1,
+            rows: [
+              {
+                cells: [
+                  {
+                    paragraphs: [
+                      { text: 'Para 1', runs: [{ text: 'Para 1' }] },
+                      { text: 'Para 2', runs: [{ text: 'Para 2' }] },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+        text: '',
+      };
+      const result = convertDocxToTypst(doc);
+      expect(result.content).toBe('#table(\n  columns: 1,\n  stroke: 1pt,\n  [#set par(spacing: 0.5em); Para 1\n\nPara 2],\n)');
+    });
+  });
+
+  describe('FIX 7: Table proportional column widths', () => {
+    it('should extract columnWidths from w:tblGrid and emit percentages in Typst', () => {
+      const xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>
+    <w:tbl>
+      <w:tblGrid>
+        <w:gridCol w:w="3000"/>
+        <w:gridCol w:w="7000"/>
+      </w:tblGrid>
+      <w:tr>
+        <w:tc><w:p><w:r><w:t>Left</w:t></w:r></w:p></w:tc>
+        <w:tc><w:p><w:r><w:t>Right</w:t></w:r></w:p></w:tc>
+      </w:tr>
+    </w:tbl>
+  </w:body>
+</w:document>`;
+      const doc = extractText(xml);
+      expect(doc.tables).toBeDefined();
+      expect(doc.tables![0].columnWidths).toEqual([3000, 7000]);
+
+      const typst = convertDocxToTypst(doc);
+      expect(typst.content).toContain('columns: (30%, 70%),');
+    });
+  });
+
+  describe('FIX 8: Bold-italic marker collision between adjacent runs', () => {
+    it('should insert space between adjacent formatted runs when boundary markers collide', () => {
+      const doc: DocxDocument = {
+        paragraphs: [
+          {
+            text: 'Title Written in Indonesian (Subtitle)',
+            runs: [
+              { text: 'Title Written in', bold: true, italic: true },
+              { text: 'Indonesian', bold: true },
+              { text: '(Subtitle)', bold: true, italic: true },
+            ],
+          },
+        ],
+        text: 'Title Written in Indonesian (Subtitle)',
+      };
+      const result = convertDocxToTypst(doc);
+      expect(result.content).toBe('*_Title Written in_* *Indonesian* *_(Subtitle)_*');
+    });
+  });
+
+  describe('FIX 9: Style inheritance and paragraph alignment', () => {
+    it('should extract style definitions and resolve basedOn chains', () => {
+      const stylesXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:style w:type="paragraph" w:styleId="BaseStyle">
+    <w:pPr><w:jc w:val="center"/></w:pPr>
+  </w:style>
+  <w:style w:type="paragraph" w:styleId="ChildStyle">
+    <w:basedOn w:val="BaseStyle"/>
+  </w:style>
+</w:styles>`;
+      const styleMap = extractStyleMap(stylesXml);
+      expect(styleMap.get('BaseStyle')?.align).toBe('center');
+      expect(styleMap.get('ChildStyle')?.align).toBe('center');
+    });
+
+    it('should inherit alignment from stylesXml when paragraph has a style', () => {
+      const docXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>
+    <w:p>
+      <w:pPr><w:pStyle w:val="CustomCenter"/></w:pPr>
+      <w:r><w:t>Centered by Style</w:t></w:r>
+    </w:p>
+  </w:body>
+</w:document>`;
+      const stylesXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:style w:type="paragraph" w:styleId="CustomCenter">
+    <w:pPr><w:jc w:val="center"/></w:pPr>
+  </w:style>
+</w:styles>`;
+
+      const doc = extractText(docXml, { stylesXml });
+      expect(doc.paragraphs[0].align).toBe('center');
+      const typst = convertDocxToTypst(doc);
+      expect(typst.content).toBe('#align(center)[Centered by Style]');
+    });
+
+    it('should apply center alignment to unstyled first title paragraph if Paper-Title style is centered', () => {
+      const docXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>
+    <w:p>
+      <w:pPr>
+        <w:rPr><w:b/><w:u w:val="single"/></w:rPr>
+      </w:pPr>
+      <w:r><w:rPr><w:b/><w:u w:val="single"/></w:rPr><w:t>DOCUMENT TITLE</w:t></w:r>
+    </w:p>
+  </w:body>
+</w:document>`;
+      const stylesXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:style w:type="paragraph" w:styleId="Paper-Title">
+    <w:pPr><w:jc w:val="center"/></w:pPr>
+  </w:style>
+</w:styles>`;
+
+      const doc = extractText(docXml, { stylesXml });
+      expect(doc.paragraphs[0].align).toBe('center');
+      const typst = convertDocxToTypst(doc);
+      expect(typst.content).toBe('#align(center)[#underline[*DOCUMENT TITLE*]]');
+    });
+  });
+
+  describe('FIX 10: Table horizontal separator lines and borders', () => {
+    it('should emit #line(length: 100%) above and below table when hasBorderTop and hasBorderBottom are set', () => {
+      const table: DocxTable = {
+        columnCount: 1,
+        hasBorderTop: true,
+        hasBorderBottom: true,
+        rows: [
+          {
+            cells: [
+              {
+                paragraphs: [{ text: 'Cell Content', runs: [{ text: 'Cell Content' }] }],
+              },
+            ],
+          },
+        ],
+      };
+      const typst = convertTableToTypst(table);
+      expect(typst.startsWith('#line(length: 100%)\n#table(')).toBe(true);
+      expect(typst.endsWith(')\n#line(length: 100%)')).toBe(true);
+    });
+
+    it('should detect table hasBorderTop and hasBorderBottom from OOXML markup', () => {
+      const xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>
+    <w:tbl>
+      <w:tr>
+        <w:tc>
+          <w:p>
+            <w:pPr>
+              <w:pBdr><w:top w:val="single"/></w:pBdr>
+            </w:pPr>
+            <w:r><w:t>Header Cell</w:t></w:r>
+          </w:p>
+        </w:tc>
+      </w:tr>
+      <w:tr>
+        <w:tc>
+          <w:tcPr>
+            <w:tcBorders><w:bottom w:val="single"/></w:tcBorders>
+          </w:tcPr>
+          <w:p>
+            <w:r><w:t>Bottom Cell</w:t></w:r>
+          </w:p>
+        </w:tc>
+      </w:tr>
+    </w:tbl>
+  </w:body>
+</w:document>`;
+      const doc = extractText(xml);
+      expect(doc.tables).toBeDefined();
+      expect(doc.tables![0].hasBorderTop).toBe(true);
+      expect(doc.tables![0].hasBorderBottom).toBe(true);
+    });
+  });
+
+  describe('FIX 11: Whitespace preservation with xml:space="preserve"', () => {
+    it('should preserve whitespace in w:t tags with xml:space="preserve"', () => {
+      const xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>
+    <w:p>
+      <w:r>
+        <w:rPr><w:b/></w:rPr>
+        <w:t xml:space="preserve">Latar Belakang: </w:t>
+      </w:r>
+      <w:r>
+        <w:t>berisi latar belakang masalah</w:t>
+      </w:r>
+    </w:p>
+  </w:body>
+</w:document>`;
+      const doc = extractText(xml);
+      expect(doc.paragraphs[0].runs[0].text).toBe('Latar Belakang: ');
+      expect(doc.paragraphs[0].runs[1].text).toBe('berisi latar belakang masalah');
+      const typst = convertDocxToTypst(doc);
+      expect(typst.content).toBe('*Latar Belakang:* berisi latar belakang masalah');
+    });
+  });
+
+  describe('Phase 11: Table cell paragraphs, vertical alignment, and preamble centering', () => {
+    it('should format cell paragraphs separated by double newline and preserve paragraph alignment inside cell', () => {
+      const table: DocxTable = {
+        columnCount: 1,
+        rows: [
+          {
+            cells: [
+              {
+                paragraphs: [
+                  {
+                    text: 'ABSTRACT',
+                    runs: [{ text: 'ABSTRACT', bold: true }],
+                    align: 'center',
+                  },
+                  {
+                    text: 'The abstract text goes here.',
+                    runs: [{ text: 'The abstract text goes here.' }],
+                    align: 'justify',
+                    indent: { firstLine: 601 },
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      };
+
+      const result = convertTableToTypst(table);
+      expect(result).toBe(
+        '#table(\n' +
+          '  columns: 1,\n' +
+          '  stroke: 1pt,\n' +
+          '  [#set par(spacing: 0.5em); #align(center)[*ABSTRACT*]\n\n#h(1.06cm)The abstract text goes here.],\n' +
+          ')',
+      );
+    });
+
+    it('should map w:vAlign center to horizon on table cell without overriding paragraph alignment', () => {
+      const xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>
+    <w:tbl>
+      <w:tr>
+        <w:tc>
+          <w:tcPr>
+            <w:vAlign w:val="center"/>
+          </w:tcPr>
+          <w:p>
+            <w:pPr>
+              <w:jc w:val="center"/>
+            </w:pPr>
+            <w:r><w:rPr><w:b/></w:rPr><w:t>Anemia</w:t></w:r>
+          </w:p>
+        </w:tc>
+      </w:tr>
+    </w:tbl>
+  </w:body>
+</w:document>`;
+
+      const doc = extractText(xml);
+      expect(doc.tables).toHaveLength(1);
+      const cell = doc.tables![0].rows[0].cells[0];
+      expect(cell.align).toBe('horizon');
+      expect(cell.paragraphs[0].align).toBe('center');
+
+      const typst = convertTableToTypst(doc.tables![0]);
+      expect(typst).toBe(
+        '#table(\n  columns: 1,\n  stroke: 1pt,\n  table.cell(align: horizon)[#set par(spacing: 0.5em); #align(center)[*Anemia*]],\n)',
+      );
+    });
+
+    it('should center unstyled author note in document preamble following centered title paragraphs', () => {
+      const xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>
+    <w:p>
+      <w:pPr>
+        <w:jc w:val="center"/>
+      </w:pPr>
+      <w:r><w:rPr><w:b/></w:rPr><w:t>Paper Title</w:t></w:r>
+    </w:p>
+    <w:p>
+      <w:pPr>
+        <w:rPr><w:color w:val="ff0000"/><w:b/></w:rPr>
+      </w:pPr>
+      <w:r>
+        <w:rPr><w:color w:val="ff0000"/><w:b/></w:rPr>
+        <w:t>(Do not include the name of the author, agency, and e-mail in the article.)</w:t>
+      </w:r>
+    </w:p>
+    <w:tbl>
+      <w:tr>
+        <w:tc><w:p><w:r><w:t>Table content</w:t></w:r></w:p></w:tc>
+      </w:tr>
+    </w:tbl>
+  </w:body>
+</w:document>`;
+
+      const doc = extractText(xml);
+      expect(doc.paragraphs[0].align).toBe('center');
+      expect(doc.paragraphs[1].align).toBe('center');
+
+      const typst = convertDocxToTypst(doc);
+      expect(typst.content).toContain(
+        '#align(center)[#text(fill: rgb("ff0000"))[*(Do not include the name of the author, agency, and e-mail in the article.)*]]',
+      );
+    });
+
+    it('should center unstyled paragraph between two centered paragraphs', () => {
+      const xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>
+    <w:p>
+      <w:pPr><w:jc w:val="center"/></w:pPr>
+      <w:r><w:t>Title Top</w:t></w:r>
+    </w:p>
+    <w:p>
+      <w:r><w:t>Author Middle</w:t></w:r>
+    </w:p>
+    <w:p>
+      <w:pPr><w:jc w:val="center"/></w:pPr>
+      <w:r><w:t>Subtitle Bottom</w:t></w:r>
+    </w:p>
+  </w:body>
+</w:document>`;
+
+      const doc = extractText(xml);
+      expect(doc.paragraphs[0].align).toBe('center');
+      expect(doc.paragraphs[1].align).toBe('center');
+      expect(doc.paragraphs[2].align).toBe('center');
     });
   });
 });

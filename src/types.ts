@@ -80,6 +80,80 @@ export interface DocxParserOptions {
    * Image extraction configuration options.
    */
   images?: ImageExtractionOptions;
+
+  /**
+   * Raw XML content of word/styles.xml for style inheritance resolution.
+   */
+  stylesXml?: string;
+}
+
+/**
+ * Paragraph indentation properties in twips (1 inch = 1440 twips).
+ */
+export interface ParagraphIndent {
+  /**
+   * Left indentation in twips.
+   */
+  left?: number;
+
+  /**
+   * Right indentation in twips.
+   */
+  right?: number;
+
+  /**
+   * First line indentation in twips.
+   */
+  firstLine?: number;
+
+  /**
+   * Hanging indentation in twips.
+   */
+  hanging?: number;
+}
+
+/**
+ * Metadata for a paragraph style extracted from word/styles.xml.
+ */
+export interface DocxStyleInfo {
+  /**
+   * The style identifier (e.g. 'Normal', 'Title', 'Heading1', 'Paper-Title').
+   */
+  styleId: string;
+
+  /**
+   * The user-friendly style name (from w:name @w:val), if present.
+   */
+  name?: string;
+
+  /**
+   * The base style identifier this style inherits from (from w:basedOn @w:val).
+   */
+  basedOn?: string;
+
+  /**
+   * The paragraph alignment defined by this style.
+   */
+  align?: 'left' | 'center' | 'right' | 'justify';
+
+  /**
+   * Paragraph indentation defined by this style.
+   */
+  indent?: ParagraphIndent;
+
+  /**
+   * Paragraph spacing defined by this style in twips.
+   */
+  spacing?: {
+    after?: number;
+    before?: number;
+    line?: number;
+  };
+
+  /**
+   * Whether this is a default style.
+   */
+  isDefault?: boolean;
 }
 
 /**
@@ -100,6 +174,11 @@ export interface RawXmlContent {
    * The raw XML string of the numbering definitions part (`word/numbering.xml`), if present.
    */
   numberingXml?: string;
+
+  /**
+   * The raw XML string of the styles part (`word/styles.xml`), if present.
+   */
+  stylesXml?: string;
 
   /**
    * Map of relationship IDs to extracted DocxImage metadata.
@@ -135,6 +214,16 @@ export interface TextRun {
    * Whether the run is formatted as underlined (`w:u`).
    */
   underline?: boolean;
+
+  /**
+   * The text color in hex format (e.g. 'ff0000', '0000ff').
+   */
+  color?: string;
+
+  /**
+   * Whether this run contains an inline page break (`w:br w:type="page"`).
+   */
+  pageBreak?: boolean;
 }
 
 /**
@@ -187,6 +276,11 @@ export type AbstractNumFmtMap = Map<string, string>;
  */
 export interface SectionProperties {
   columnCount: number;
+
+  /**
+   * Whether this section break creates a new page.
+   */
+  pageBreak?: boolean;
 }
 
 /**
@@ -215,6 +309,11 @@ export interface Paragraph {
   isEmpty?: boolean;
 
   /**
+   * Whether this paragraph forces a page break before it (`w:pPr > w:pageBreakBefore`).
+   */
+  pageBreakBefore?: boolean;
+
+  /**
    * List item numbering and nesting metadata, if this paragraph is part of a list.
    */
   listItem?: ListItemInfo;
@@ -228,6 +327,35 @@ export interface Paragraph {
    * Section break properties defined at the end of this paragraph.
    */
   sectionBreak?: SectionProperties;
+
+  /**
+   * Paragraph text alignment ('left' | 'center' | 'right' | 'justify').
+   */
+  align?: 'left' | 'center' | 'right' | 'justify';
+
+  /**
+   * Whether the paragraph has a top border (from w:pBdr > w:top).
+   */
+  hasBorderTop?: boolean;
+
+  /**
+   * Whether the paragraph has a bottom border (from w:pBdr > w:bottom).
+   */
+  hasBorderBottom?: boolean;
+
+  /**
+   * Indentation properties of the paragraph in twips.
+   */
+  indent?: ParagraphIndent;
+
+  /**
+   * Paragraph spacing properties in twips.
+   */
+  spacing?: {
+    after?: number;    // in twips
+    before?: number;   // in twips
+    line?: number;     // in twips
+  };
 }
 
 /**
@@ -245,14 +373,24 @@ export interface TableCell {
   columnSpan?: number;
 
   /**
+   * The number of table rows spanned by this cell (`w:vMerge`), if greater than 1.
+   */
+  rowSpan?: number;
+
+  /**
    * Indicates whether this cell is vertically merged (`w:vMerge`).
    */
   isVerticalMerge?: boolean;
 
   /**
-   * Cell text alignment ('left' | 'center' | 'right').
+   * Vertical merge state: 'restart' starts a merge, 'continue' continues a merge from above.
    */
-  align?: 'left' | 'center' | 'right';
+  vMerge?: 'restart' | 'continue';
+
+  /**
+   * Cell vertical alignment in Typst ('top' | 'horizon' | 'bottom' | 'left' | 'center' | 'right').
+   */
+  align?: 'top' | 'horizon' | 'bottom' | 'left' | 'center' | 'right' | string;
 }
 
 /**
@@ -288,6 +426,33 @@ export interface DocxTable {
    * The style identifier of the table (`w:tblPr > w:tblStyle @w:val`), if present.
    */
   style?: string;
+
+  /**
+   * Column widths in twips from w:tblGrid > w:gridCol.
+   */
+  columnWidths?: number[];
+
+  /**
+   * Table border configuration from w:tblPr > w:tblBorders or cell overrides.
+   */
+  borders?: {
+    top?: boolean;
+    bottom?: boolean;
+    left?: boolean;
+    right?: boolean;
+    insideH?: boolean;
+    insideV?: boolean;
+  };
+
+  /**
+   * Whether the table has a top border (e.g. from w:tblBorders, cell borders, or first row paragraph borders).
+   */
+  hasBorderTop?: boolean;
+
+  /**
+   * Whether the table has a bottom border (e.g. from w:tblBorders, cell borders, or last row paragraph borders).
+   */
+  hasBorderBottom?: boolean;
 }
 
 /**

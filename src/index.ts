@@ -34,6 +34,8 @@ export type {
   TableCell,
   TableRow,
   DocxTable,
+  DocxStyleInfo,
+  ParagraphIndent,
 } from './types.js';
 
 // Re-export all custom error classes
@@ -42,7 +44,7 @@ export { DocxReadError, DocxParseError, type DocxErrorOptions } from './errors.j
 // Re-export parsing and extraction utilities
 export { parseXml, parseXmlPreserveOrder } from './utils/xmlParser.js';
 export { readDocxFile } from './reader.js';
-export { extractText, resolveListItems } from './extractor/textExtractor.js';
+export { extractStyleMap, extractText, resolveListItems } from './extractor/textExtractor.js';
 export { extractNumberingMaps } from './extractor/numberingExtractor.js';
 export { extractTables } from './extractor/tableExtractor.js';
 export {
@@ -54,6 +56,8 @@ export {
   convertDocxToTypst,
   convertTableToTypst,
   getHeadingLevel,
+  twipsToCm,
+  applyIndentation,
 } from './converter/typstConverter.js';
 
 /**

@@ -14,7 +14,13 @@ const parser = new XMLParser({
   attributeNamePrefix: '@_',
   textNodeName: '#text',
   parseAttributeValue: true,
-  trimValues: true,
+  trimValues: false,
+  tagValueProcessor: (tagName, tagValue) => {
+    if (tagName === 'w:t' || tagName === 't') {
+      return tagValue;
+    }
+    return tagValue.trim();
+  },
 });
 
 /**
@@ -63,7 +69,13 @@ const orderedParser = new XMLParser({
   attributeNamePrefix: '@_',
   textNodeName: '#text',
   parseAttributeValue: true,
-  trimValues: true,
+  trimValues: false,
+  tagValueProcessor: (tagName, tagValue) => {
+    if (tagName === 'w:t' || tagName === 't') {
+      return tagValue;
+    }
+    return tagValue.trim();
+  },
 });
 
 /**

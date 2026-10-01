@@ -13,10 +13,12 @@ import type {
   DocxDocument,
   DocxImage,
   DocxParserOptions,
+  DocxStyleInfo,
   DocxTable,
   ListItemInfo,
   NumIdMap,
   Paragraph,
+  ParagraphIndent,
   SectionProperties,
   TextRun,
 } from '../types.js';
@@ -87,6 +89,26 @@ function getProperty(record: Record<string, unknown>, ...keys: string[]): unknow
   for (const key of keys) {
     if (key in record && record[key] !== undefined) {
       return record[key];
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Retrieves a numeric attribute from a record matching one of several candidate keys.
+ * Tries each key, parses as integer, and returns the first valid number or undefined.
+ *
+ * @param record - Target record.
+ * @param keys - Candidate attribute keys.
+ * @returns The parsed integer value, or undefined if none found or not a number.
+ */
+function getNumericAttr(record: Record<string, unknown>, ...keys: string[]): number | undefined {
+  for (const key of keys) {
+    if (key in record && record[key] !== undefined && record[key] !== null) {
+      const val = parseInt(String(record[key]), 10);
+      if (!isNaN(val)) {
+        return val;
+      }
     }
   }
   return undefined;
@@ -196,6 +218,7 @@ function extractRun(
   rNode: unknown,
   imageMap?: Map<string, DocxImage>,
   paragraphImages?: DocxImage[],
+  defaultColor?: string,
 ): TextRun | null {
   if (!isRecord(rNode)) {
     return null;
@@ -208,6 +231,7 @@ function extractRun(
   let bold: boolean | undefined;
   let italic: boolean | undefined;
   let underline: boolean | undefined;
+  let color: string | undefined;
 
   if (rPr) {
     const bNode = getProperty(rPr, 'w:b', 'b');
@@ -224,6 +248,18 @@ function extractRun(
     if (isUnderlineActive(uNode)) {
       underline = true;
     }
+
+    const colorNode = getProperty(rPr, 'w:color', 'color');
+    if (isRecord(colorNode)) {
+      const colorVal = getProperty(colorNode, '@_w:val', '@_val', '@w:val', 'val');
+      if (colorVal && typeof colorVal === 'string' && colorVal !== 'auto' && colorVal !== '000000') {
+        color = colorVal;
+      }
+    } else if (defaultColor) {
+      color = defaultColor;
+    }
+  } else if (defaultColor) {
+    color = defaultColor;
   }
 
   // Extract text nodes (w:t)
@@ -237,8 +273,20 @@ function extractRun(
   if (getProperty(rNode, 'w:tab', 'tab') !== undefined) {
     text += '\t';
   }
-  if (getProperty(rNode, 'w:br', 'br') !== undefined) {
-    text += '\n';
+
+  let pageBreak: boolean | undefined;
+  const brNodes = toArray(getProperty(rNode, 'w:br', 'br'));
+  for (const br of brNodes) {
+    if (isRecord(br)) {
+      const brType = getProperty(br, '@_w:type', '@_type', '@w:type', 'type');
+      if (brType === 'page') {
+        pageBreak = true;
+      } else {
+        text += '\n';
+      }
+    } else if (br !== undefined && br !== null) {
+      text += '\n';
+    }
   }
 
   // Check for w:drawing in the run node
@@ -256,6 +304,8 @@ function extractRun(
     ...(bold ? { bold: true } : {}),
     ...(italic ? { italic: true } : {}),
     ...(underline ? { underline: true } : {}),
+    ...(color ? { color } : {}),
+    ...(pageBreak ? { pageBreak: true } : {}),
   };
 
   return run;
@@ -268,19 +318,21 @@ function extractRun(
  * @param container - Parsed paragraph or child container node.
  * @param imageMap - Optional mapping of relationship IDs to DocxImage objects.
  * @param paragraphImages - Optional array accumulating images in the paragraph.
+ * @param defaultColor - Optional default text color inherited from paragraph properties.
  * @returns Array of parsed TextRun objects.
  */
 function extractRunsFromContainer(
   container: Record<string, unknown>,
   imageMap?: Map<string, DocxImage>,
   paragraphImages?: DocxImage[],
+  defaultColor?: string,
 ): TextRun[] {
   const runs: TextRun[] = [];
 
   // Direct runs (w:r)
   const directRuns = toArray(getProperty(container, 'w:r', 'r'));
   for (const rNode of directRuns) {
-    const run = extractRun(rNode, imageMap, paragraphImages);
+    const run = extractRun(rNode, imageMap, paragraphImages, defaultColor);
     if (run !== null) {
       runs.push(run);
     }
@@ -314,7 +366,7 @@ function extractRunsFromContainer(
   );
   for (const hyperlink of hyperlinks) {
     if (isRecord(hyperlink)) {
-      runs.push(...extractRunsFromContainer(hyperlink, imageMap, paragraphImages));
+      runs.push(...extractRunsFromContainer(hyperlink, imageMap, paragraphImages, defaultColor));
     }
   }
 
@@ -342,17 +394,203 @@ function extractRunsFromContainer(
 }
 
 /**
+ * Extracts paragraph styles and their formatting properties (including alignment) from word/styles.xml.
+ * Resolves basedOn inheritance chains so derived styles inherit parent alignment.
+ *
+ * @param stylesXml - Raw XML string from `word/styles.xml`.
+ * @returns Map of style ID (and style name) to DocxStyleInfo.
+ */
+export function extractStyleMap(stylesXml: string): Map<string, DocxStyleInfo> {
+  const map = new Map<string, DocxStyleInfo>();
+  if (typeof stylesXml !== 'string' || stylesXml.trim().length === 0) {
+    return map;
+  }
+
+  let parsed: Record<string, unknown>;
+  try {
+    parsed = parseXml(stylesXml);
+  } catch {
+    return map;
+  }
+
+  const stylesRoot = getProperty(parsed, 'w:styles', 'styles');
+  const rootObj = isRecord(stylesRoot) ? stylesRoot : parsed;
+  const styleNodes = toArray<Record<string, unknown>>(
+    getProperty(rootObj, 'w:style', 'style'),
+  );
+
+  for (const styleNode of styleNodes) {
+    if (!isRecord(styleNode)) {
+      continue;
+    }
+
+    const type = getProperty(styleNode, '@_w:type', '@_type', '@w:type', 'type');
+    const typeStr = type !== undefined ? String(type).toLowerCase().trim() : undefined;
+    if (typeStr !== undefined && typeStr !== 'paragraph' && typeStr !== 'table') {
+      continue;
+    }
+
+    const styleId = getProperty(
+      styleNode,
+      '@_w:styleId',
+      '@_styleId',
+      '@w:styleId',
+      'styleId',
+    );
+    if (styleId === undefined || styleId === null) {
+      continue;
+    }
+    const styleIdStr = String(styleId);
+
+    let name: string | undefined;
+    const nameNode = getProperty(styleNode, 'w:name', 'name');
+    if (isRecord(nameNode)) {
+      const val = getProperty(nameNode, '@_w:val', '@_val', '@w:val', 'val');
+      if (val !== undefined && val !== null) {
+        name = String(val);
+      }
+    }
+
+    let basedOn: string | undefined;
+    const basedOnNode = getProperty(styleNode, 'w:basedOn', 'basedOn');
+    if (isRecord(basedOnNode)) {
+      const val = getProperty(basedOnNode, '@_w:val', '@_val', '@w:val', 'val');
+      if (val !== undefined && val !== null) {
+        basedOn = String(val);
+      }
+    }
+
+    let isDefault: boolean | undefined;
+    const defaultVal = getProperty(
+      styleNode,
+      '@_w:default',
+      '@_default',
+      '@w:default',
+      'default',
+    );
+    if (defaultVal === '1' || defaultVal === 1 || defaultVal === true || defaultVal === 'true') {
+      isDefault = true;
+    }
+
+    let align: 'left' | 'center' | 'right' | 'justify' | undefined;
+    let indent: ParagraphIndent | undefined;
+    let spacing: DocxStyleInfo['spacing'] | undefined;
+    const pPr = getProperty(styleNode, 'w:pPr', 'pPr');
+    if (isRecord(pPr)) {
+      const jcRaw = getProperty(pPr, 'w:jc', 'jc');
+      let jcVal: string | undefined;
+      if (isRecord(jcRaw)) {
+        const val = getProperty(jcRaw, '@_w:val', '@_val', '@w:val', 'val');
+        if (val !== undefined && val !== null) {
+          jcVal = String(val).toLowerCase().trim();
+        }
+      } else if (typeof jcRaw === 'string') {
+        jcVal = jcRaw.toLowerCase().trim();
+      }
+
+      if (jcVal === 'center') {
+        align = 'center';
+      } else if (jcVal === 'right') {
+        align = 'right';
+      } else if (jcVal === 'both' || jcVal === 'justify') {
+        align = 'justify';
+      } else if (jcVal === 'left') {
+        align = 'left';
+      }
+
+      const indNode = getProperty(pPr, 'w:ind', 'ind');
+      if (isRecord(indNode)) {
+        const left = getNumericAttr(indNode, '@_w:left', '@_left', '@w:left', 'left', '@_w:start', '@w:start');
+        const right = getNumericAttr(indNode, '@_w:right', '@_right', '@w:right', 'right', '@_w:end', '@w:end');
+        const firstLine = getNumericAttr(indNode, '@_w:firstLine', '@_firstLine', '@w:firstLine', 'firstLine');
+        const hanging = getNumericAttr(indNode, '@_w:hanging', '@_hanging', '@w:hanging', 'hanging');
+
+        if (
+          (left !== undefined && left > 0) ||
+          (right !== undefined && right > 0) ||
+          (firstLine !== undefined && firstLine > 0) ||
+          (hanging !== undefined && hanging > 0)
+        ) {
+          indent = {};
+          if (left !== undefined && left > 0) indent.left = left;
+          if (right !== undefined && right > 0) indent.right = right;
+          if (firstLine !== undefined && firstLine > 0) indent.firstLine = firstLine;
+          if (hanging !== undefined && hanging > 0) indent.hanging = hanging;
+        }
+      }
+
+      const spacingNode = getProperty(pPr, 'w:spacing', 'spacing');
+      if (isRecord(spacingNode)) {
+        const after = getNumericAttr(spacingNode, '@_w:after', '@_after', '@w:after', 'after');
+        const before = getNumericAttr(spacingNode, '@_w:before', '@_before', '@w:before', 'before');
+        const line = getNumericAttr(spacingNode, '@_w:line', '@_line', '@w:line', 'line');
+
+        if (after !== undefined || before !== undefined || line !== undefined) {
+          spacing = {};
+          if (after !== undefined) spacing.after = after;
+          if (before !== undefined) spacing.before = before;
+          if (line !== undefined) spacing.line = line;
+        }
+      }
+    }
+
+    const info: DocxStyleInfo = {
+      styleId: styleIdStr,
+      ...(name !== undefined ? { name } : {}),
+      ...(basedOn !== undefined ? { basedOn } : {}),
+      ...(align !== undefined ? { align } : {}),
+      ...(indent !== undefined ? { indent } : {}),
+      ...(spacing !== undefined ? { spacing } : {}),
+      ...(isDefault ? { isDefault: true } : {}),
+    };
+
+    map.set(styleIdStr, info);
+    if (name && name !== styleIdStr && !map.has(name)) {
+      map.set(name, info);
+    }
+  }
+
+  // Resolve basedOn inheritance chains for align, indent, and spacing
+  for (const info of map.values()) {
+    if ((!info.align || !info.indent || !info.spacing) && info.basedOn) {
+      let currentParentId: string | undefined = info.basedOn;
+      const visited = new Set<string>([info.styleId]);
+      while (currentParentId && !visited.has(currentParentId)) {
+        visited.add(currentParentId);
+        const parent = map.get(currentParentId);
+        if (!parent) break;
+        if (!info.align && parent.align) {
+          info.align = parent.align;
+        }
+        if (!info.indent && parent.indent) {
+          info.indent = { ...parent.indent };
+        }
+        if (!info.spacing && parent.spacing) {
+          info.spacing = { ...parent.spacing };
+        }
+        if (info.align && info.indent && info.spacing) break;
+        currentParentId = parent.basedOn;
+      }
+    }
+  }
+
+  return map;
+}
+
+/**
  * Extracts a Paragraph object from a parsed w:p node.
  *
  * @param pNode - Parsed w:p XML node.
  * @param options - Parser options.
  * @param imageMap - Optional mapping of relationship IDs to DocxImage objects.
+ * @param styleMap - Optional mapping of style identifiers to DocxStyleInfo for style inheritance.
  * @returns Extracted Paragraph.
  */
 export function extractParagraph(
   pNode: unknown,
   options?: DocxParserOptions,
   imageMap?: Map<string, DocxImage>,
+  styleMap?: Map<string, DocxStyleInfo>,
 ): Paragraph {
   if (!isRecord(pNode)) {
     return {
@@ -393,8 +631,73 @@ export function extractParagraph(
           }
         }
       }
-      if (columnCount > 1) {
-        sectionBreak = { columnCount };
+
+      let sectPageBreak = false;
+      const typeRaw = getProperty(sectPrRaw, 'w:type', 'type');
+      let typeVal: string | undefined;
+      if (isRecord(typeRaw)) {
+        const val = getProperty(typeRaw, '@_w:val', '@_val', '@w:val', 'val');
+        if (val !== undefined && val !== null) {
+          typeVal = String(val).toLowerCase().trim();
+        }
+      } else if (typeof typeRaw === 'string') {
+        typeVal = typeRaw.toLowerCase().trim();
+      }
+
+      if (!typeVal || typeVal === 'nextpage' || typeVal === 'oddpage' || typeVal === 'evenpage') {
+        sectPageBreak = true;
+      }
+
+      if (columnCount > 1 || sectPageBreak) {
+        sectionBreak = {
+          columnCount,
+          ...(sectPageBreak ? { pageBreak: true } : {}),
+        };
+      }
+    }
+  }
+
+  // Check for paragraph default color in w:pPr > w:rPr > w:color
+  let defaultColor: string | undefined;
+  if (pPr) {
+    const pRprRaw = getProperty(pPr, 'w:rPr', 'rPr');
+    if (isRecord(pRprRaw)) {
+      const colorNode = getProperty(pRprRaw, 'w:color', 'color');
+      if (isRecord(colorNode)) {
+        const colorVal = getProperty(colorNode, '@_w:val', '@_val', '@w:val', 'val');
+        if (colorVal && typeof colorVal === 'string' && colorVal !== 'auto' && colorVal !== '000000') {
+          defaultColor = colorVal;
+        }
+      }
+    }
+  }
+
+  // Check for w:pageBreakBefore in pPr
+  let pageBreakBefore: boolean | undefined;
+  if (pPr) {
+    const pbbNode = getProperty(pPr, 'w:pageBreakBefore', 'pageBreakBefore');
+    if (pbbNode !== undefined && pbbNode !== null) {
+      if (isRecord(pbbNode)) {
+        const val = getProperty(pbbNode, '@_w:val', '@_val', '@w:val', 'val');
+        if (val !== undefined && val !== null) {
+          const valStr = String(val).toLowerCase().trim();
+          if (valStr !== '0' && valStr !== 'false' && valStr !== 'off') {
+            pageBreakBefore = true;
+          }
+        } else {
+          pageBreakBefore = true;
+        }
+      } else if (typeof pbbNode === 'boolean') {
+        if (pbbNode) pageBreakBefore = true;
+      } else if (typeof pbbNode === 'number') {
+        if (pbbNode !== 0) pageBreakBefore = true;
+      } else if (typeof pbbNode === 'string') {
+        const s = pbbNode.toLowerCase().trim();
+        if (s !== '0' && s !== 'false' && s !== 'off') {
+          pageBreakBefore = true;
+        }
+      } else {
+        pageBreakBefore = true;
       }
     }
   }
@@ -454,15 +757,146 @@ export function extractParagraph(
     }
   }
 
+  // Check for paragraph alignment (w:jc / jc)
+  let align: 'left' | 'center' | 'right' | 'justify' | undefined;
+  if (pPr) {
+    const jcRaw = getProperty(pPr, 'w:jc', 'jc');
+    let jcVal: string | undefined;
+    if (isRecord(jcRaw)) {
+      const val = getProperty(jcRaw, '@_w:val', '@_val', '@w:val', 'val');
+      if (val !== undefined && val !== null) {
+        jcVal = String(val).toLowerCase().trim();
+      }
+    } else if (typeof jcRaw === 'string') {
+      jcVal = jcRaw.toLowerCase().trim();
+    }
+
+    if (jcVal === 'center') {
+      align = 'center';
+    } else if (jcVal === 'right') {
+      align = 'right';
+    } else if (jcVal === 'both' || jcVal === 'justify') {
+      align = 'justify';
+    }
+  }
+
+  // Inherit alignment from style if not explicitly set on paragraph
+  if (align === undefined && style !== undefined && styleMap) {
+    const styleInfo = styleMap.get(style);
+    if (styleInfo?.align) {
+      align = styleInfo.align;
+    }
+  }
+
+  // Check for paragraph indentation (w:ind / ind)
+  let indent: ParagraphIndent | undefined;
+  if (pPr) {
+    const indNode = getProperty(pPr, 'w:ind', 'ind');
+    if (isRecord(indNode)) {
+      const left = getNumericAttr(indNode, '@_w:left', '@_left', '@w:left', 'left', '@_w:start', '@w:start');
+      const right = getNumericAttr(indNode, '@_w:right', '@_right', '@w:right', 'right', '@_w:end', '@w:end');
+      const firstLine = getNumericAttr(indNode, '@_w:firstLine', '@_firstLine', '@w:firstLine', 'firstLine');
+      const hanging = getNumericAttr(indNode, '@_w:hanging', '@_hanging', '@w:hanging', 'hanging');
+
+      // Only store if any value is non-zero
+      if (
+        (left !== undefined && left > 0) ||
+        (right !== undefined && right > 0) ||
+        (firstLine !== undefined && firstLine > 0) ||
+        (hanging !== undefined && hanging > 0)
+      ) {
+        indent = {};
+        if (left !== undefined && left > 0) indent.left = left;
+        if (right !== undefined && right > 0) indent.right = right;
+        if (firstLine !== undefined && firstLine > 0) indent.firstLine = firstLine;
+        if (hanging !== undefined && hanging > 0) indent.hanging = hanging;
+      }
+    }
+  }
+
+  // Inherit indentation from style if not explicitly set on paragraph
+  if (indent === undefined && style !== undefined && styleMap) {
+    const styleInfo = styleMap.get(style);
+    if (styleInfo?.indent) {
+      indent = { ...styleInfo.indent };
+    }
+  }
+
+  // Check for paragraph spacing (w:spacing / spacing)
+  let spacing: Paragraph['spacing'] | undefined;
+  if (pPr) {
+    const spacingNode = getProperty(pPr, 'w:spacing', 'spacing');
+    if (isRecord(spacingNode)) {
+      const after = getNumericAttr(spacingNode, '@_w:after', '@_after', '@w:after', 'after');
+      const before = getNumericAttr(spacingNode, '@_w:before', '@_before', '@w:before', 'before');
+      const line = getNumericAttr(spacingNode, '@_w:line', '@_line', '@w:line', 'line');
+
+      if (after !== undefined || before !== undefined || line !== undefined) {
+        spacing = {};
+        if (after !== undefined) spacing.after = after;
+        if (before !== undefined) spacing.before = before;
+        if (line !== undefined) spacing.line = line;
+      }
+    }
+  }
+
+  // Inherit spacing from style if not explicitly set on paragraph
+  if (spacing === undefined && style !== undefined && styleMap) {
+    const styleInfo = styleMap.get(style);
+    if (styleInfo?.spacing) {
+      spacing = { ...styleInfo.spacing };
+    }
+  }
+
+  // Check for paragraph borders (w:pBdr / pBdr)
+  let hasBorderTop: boolean | undefined;
+  let hasBorderBottom: boolean | undefined;
+  if (pPr) {
+    const pBdrRaw = getProperty(pPr, 'w:pBdr', 'pBdr');
+    if (isRecord(pBdrRaw)) {
+      const bottomBdr = getProperty(pBdrRaw, 'w:bottom', 'bottom');
+      if (isRecord(bottomBdr)) {
+        const val = getProperty(bottomBdr, '@_w:val', '@_val', '@w:val', 'val');
+        if (typeof val === 'string' && val.toLowerCase() !== 'none' && val.toLowerCase() !== 'nil') {
+          hasBorderBottom = true;
+        }
+      }
+      const topBdr = getProperty(pBdrRaw, 'w:top', 'top');
+      if (isRecord(topBdr)) {
+        const val = getProperty(topBdr, '@_w:val', '@_val', '@w:val', 'val');
+        if (typeof val === 'string' && val.toLowerCase() !== 'none' && val.toLowerCase() !== 'nil') {
+          hasBorderTop = true;
+        }
+      }
+    }
+  }
+
   const paragraphImages: DocxImage[] = [];
-  const runs = extractRunsFromContainer(pNode, imageMap, paragraphImages);
+  const runs = extractRunsFromContainer(pNode, imageMap, paragraphImages, defaultColor);
+  if (defaultColor) {
+    for (const run of runs) {
+      if (!run.color && run.text && run.text.trim().length > 0) {
+        run.color = defaultColor;
+      }
+    }
+  }
   const text = runs.map((r) => r.text).join('');
-  const isEmpty = (runs.length === 0 || text.length === 0) && paragraphImages.length === 0;
+  const hasPageBreakRun = runs.some((r) => r.pageBreak);
+  const isEmpty =
+    (runs.length === 0 || text.length === 0) &&
+    paragraphImages.length === 0 &&
+    !hasPageBreakRun;
 
   return {
     text,
     runs,
     ...(style !== undefined ? { style } : {}),
+    ...(align !== undefined ? { align } : {}),
+    ...(indent !== undefined ? { indent } : {}),
+    ...(spacing !== undefined ? { spacing } : {}),
+    ...(hasBorderTop ? { hasBorderTop: true } : {}),
+    ...(hasBorderBottom ? { hasBorderBottom: true } : {}),
+    ...(pageBreakBefore ? { pageBreakBefore: true } : {}),
     ...(isEmpty ? { isEmpty: true } : {}),
     ...(listItem !== undefined ? { listItem } : {}),
     ...(paragraphImages.length > 0 ? { images: paragraphImages } : {}),
@@ -525,6 +959,8 @@ export function extractText(
   const tblNodes = toArray<Record<string, unknown>>(getProperty(bodyObj, 'w:tbl', 'tbl'));
   const sdtNodes = toArray<Record<string, unknown>>(getProperty(bodyObj, 'w:sdt', 'sdt'));
 
+  const styleMap = options?.stylesXml ? extractStyleMap(options.stylesXml) : undefined;
+
   let orderedParagraphs: Paragraph[] = [];
   let orderedTables: DocxTable[] = [];
   let bodyItems: BodyItem[] = [];
@@ -561,14 +997,14 @@ export function extractText(
 
         if (tagName === 'w:p' || tagName === 'p') {
           if (pIndex < pNodes.length) {
-            const para = extractParagraph(pNodes[pIndex++], options, imageMap);
+            const para = extractParagraph(pNodes[pIndex++], options, imageMap, styleMap);
             orderedParagraphs.push(para);
             bodyItems.push({ type: 'paragraph', paragraph: para });
           }
         } else if (tagName === 'w:tbl' || tagName === 'tbl') {
           if (tblIndex < tblNodes.length) {
             const tableWrapper = { 'w:tbl': [tblNodes[tblIndex++]] };
-            const extracted = extractTables(tableWrapper);
+            const extracted = extractTables(tableWrapper, options, imageMap, styleMap);
             if (extracted.length > 0) {
               orderedTables.push(extracted[0]);
               bodyItems.push({ type: 'table', table: extracted[0] });
@@ -581,14 +1017,14 @@ export function extractText(
             if (isRecord(sdtContent)) {
               const sdtPNodes = toArray(getProperty(sdtContent, 'w:p', 'p'));
               for (const sdtP of sdtPNodes) {
-                const para = extractParagraph(sdtP, options, imageMap);
+                const para = extractParagraph(sdtP, options, imageMap, styleMap);
                 orderedParagraphs.push(para);
                 bodyItems.push({ type: 'paragraph', paragraph: para });
               }
               const sdtTblNodes = toArray(getProperty(sdtContent, 'w:tbl', 'tbl'));
               for (const sdtTbl of sdtTblNodes) {
                 const tableWrapper = { 'w:tbl': [sdtTbl] };
-                const extracted = extractTables(tableWrapper);
+                const extracted = extractTables(tableWrapper, options, imageMap, styleMap);
                 if (extracted.length > 0) {
                   orderedTables.push(extracted[0]);
                   bodyItems.push({ type: 'table', table: extracted[0] });
@@ -601,13 +1037,13 @@ export function extractText(
 
       // Append any remaining paragraphs or tables if not visited in bodyChildren
       while (pIndex < pNodes.length) {
-        const para = extractParagraph(pNodes[pIndex++], options, imageMap);
+        const para = extractParagraph(pNodes[pIndex++], options, imageMap, styleMap);
         orderedParagraphs.push(para);
         bodyItems.push({ type: 'paragraph', paragraph: para });
       }
       while (tblIndex < tblNodes.length) {
         const tableWrapper = { 'w:tbl': [tblNodes[tblIndex++]] };
-        const extracted = extractTables(tableWrapper);
+        const extracted = extractTables(tableWrapper, options, imageMap, styleMap);
         if (extracted.length > 0) {
           orderedTables.push(extracted[0]);
           bodyItems.push({ type: 'table', table: extracted[0] });
@@ -622,13 +1058,71 @@ export function extractText(
 
   if (!preserveOrderSuccess) {
     orderedParagraphs = pNodes.map((pNode) =>
-      extractParagraph(pNode, options, imageMap),
+      extractParagraph(pNode, options, imageMap, styleMap),
     );
-    orderedTables = isRecord(bodyObj) ? extractTables(bodyObj) : [];
+    orderedTables = isRecord(bodyObj) ? extractTables(bodyObj, options, imageMap, styleMap) : [];
     bodyItems = [
       ...orderedParagraphs.map((p) => ({ type: 'paragraph' as const, paragraph: p })),
       ...orderedTables.map((t) => ({ type: 'table' as const, table: t })),
     ];
+  }
+
+  // If a Paper-Title or Title style specifies center alignment, apply to the unstyled first title paragraph
+  if (styleMap && styleMap.size > 0 && orderedParagraphs.length > 0) {
+    const firstP = orderedParagraphs.find((p) => !p.isEmpty && p.text.trim().length > 0);
+    if (firstP && !firstP.style && !firstP.align) {
+      const paperTitleStyle = styleMap.get('Paper-Title') ?? styleMap.get('Title');
+      if (paperTitleStyle?.align === 'center') {
+        const hasTitleFormatting = firstP.runs.some((r) => r.bold || r.underline);
+        if (hasTitleFormatting) {
+          firstP.align = 'center';
+        }
+      }
+    }
+  }
+
+  // Heuristic for title block / preamble paragraphs:
+  // In the document preamble (before the first table or heading),
+  // if all preceding non-empty paragraphs are centered, any unstyled paragraph with metadata/title formatting
+  // (e.g. bold, colored text, or parenthesized author note) or following a centered title block is centered.
+  let precedingCenteredCount = 0;
+  for (const item of bodyItems) {
+    if (item.type === 'table') {
+      break;
+    }
+    const p = item.paragraph;
+    if (p.isEmpty || p.text.trim().length === 0) {
+      continue;
+    }
+    if (p.style && /^heading\s*[1-6]$/i.test(p.style.trim())) {
+      break;
+    }
+    if (p.align === 'center') {
+      precedingCenteredCount++;
+      continue;
+    }
+    if (!p.align && !p.style && precedingCenteredCount > 0) {
+      const hasMetadataStyle =
+        p.runs.some((r) => r.bold || r.color || r.italic) ||
+        (p.text.trim().startsWith('(') && p.text.trim().endsWith(')'));
+      if (hasMetadataStyle) {
+        p.align = 'center';
+        precedingCenteredCount++;
+        continue;
+      }
+    }
+    break;
+  }
+
+  // Also heuristic for unstyled paragraphs between two centered paragraphs (ignoring empty paragraphs)
+  const nonEmptyParas = orderedParagraphs.filter((p) => !p.isEmpty && p.text.trim().length > 0);
+  for (let i = 1; i < nonEmptyParas.length - 1; i++) {
+    const prev = nonEmptyParas[i - 1];
+    const curr = nonEmptyParas[i];
+    const next = nonEmptyParas[i + 1];
+    if (!curr.align && !curr.style && prev.align === 'center' && next.align === 'center') {
+      curr.align = 'center';
+    }
   }
 
   const text = orderedParagraphs.map((p) => p.text).join('\n');

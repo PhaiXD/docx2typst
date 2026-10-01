@@ -3,7 +3,7 @@
  * Unit tests for text extraction from OOXML markup.
  */
 
-import { extractParagraph, extractText, resolveListItems } from '../extractor/textExtractor.js';
+import { extractParagraph, extractStyleMap, extractText, resolveListItems } from '../extractor/textExtractor.js';
 import { DocxParseError } from '../errors.js';
 import type { AbstractNumMap, DocxDocument, NumIdMap } from '../types.js';
 
@@ -631,6 +631,247 @@ describe('textExtractor', () => {
       expect(para.images).toHaveLength(1);
       expect(para.text).toBe('');
     });
+
+    it('should extract run color and skip auto and 000000', () => {
+      const pNode = {
+        'w:r': [
+          {
+            'w:rPr': { 'w:color': { '@_w:val': 'ff0000' } },
+            'w:t': 'Red text',
+          },
+          {
+            'w:rPr': { 'w:color': { '@_w:val': 'auto' } },
+            'w:t': 'Auto text',
+          },
+          {
+            'w:rPr': { 'w:color': { '@_w:val': '000000' } },
+            'w:t': 'Black text',
+          },
+        ],
+      };
+
+      const para = extractParagraph(pNode);
+      expect(para.runs).toHaveLength(3);
+      expect(para.runs[0].color).toBe('ff0000');
+      expect(para.runs[1].color).toBeUndefined();
+      expect(para.runs[2].color).toBeUndefined();
+    });
+
+    it('should apply paragraph-level default color to runs without explicit color', () => {
+      const pNode = {
+        'w:pPr': {
+          'w:rPr': { 'w:color': { '@_w:val': '0000ff' } },
+        },
+        'w:r': [
+          { 'w:t': 'Inherited blue text' },
+          {
+            'w:rPr': { 'w:color': { '@_w:val': 'ff0000' } },
+            'w:t': 'Explicit red text',
+          },
+        ],
+      };
+
+      const para = extractParagraph(pNode);
+      expect(para.runs).toHaveLength(2);
+      expect(para.runs[0].color).toBe('0000ff');
+      expect(para.runs[1].color).toBe('ff0000');
+    });
+
+    it('should extract pageBreakBefore on paragraph', () => {
+      const pNode = {
+        'w:pPr': {
+          'w:pageBreakBefore': {},
+        },
+        'w:r': [{ 'w:t': 'Page 2 start' }],
+      };
+
+      const para = extractParagraph(pNode);
+      expect(para.pageBreakBefore).toBe(true);
+
+      const pNodeDisabled = {
+        'w:pPr': {
+          'w:pageBreakBefore': { '@_w:val': '0' },
+        },
+        'w:r': [{ 'w:t': 'No break' }],
+      };
+      const paraDisabled = extractParagraph(pNodeDisabled);
+      expect(paraDisabled.pageBreakBefore).toBeUndefined();
+    });
+
+    it('should extract run pageBreak on w:br type="page"', () => {
+      const pNode = {
+        'w:r': [
+          {
+            'w:br': { '@_w:type': 'page' },
+          },
+        ],
+      };
+
+      const para = extractParagraph(pNode);
+      expect(para.runs[0].pageBreak).toBe(true);
+    });
+
+    it('should extract sectionBreak pageBreak for nextPage and continuous', () => {
+      const pNodeNext = {
+        'w:pPr': {
+          'w:sectPr': {
+            'w:type': { '@_w:val': 'nextPage' },
+          },
+        },
+      };
+      const paraNext = extractParagraph(pNodeNext);
+      expect(paraNext.sectionBreak?.pageBreak).toBe(true);
+
+      const pNodeContinuous = {
+        'w:pPr': {
+          'w:sectPr': {
+            'w:type': { '@_w:val': 'continuous' },
+            'w:cols': { '@_w:num': '2' },
+          },
+        },
+      };
+      const paraContinuous = extractParagraph(pNodeContinuous);
+      expect(paraContinuous.sectionBreak?.pageBreak).toBeUndefined();
+      expect(paraContinuous.sectionBreak?.columnCount).toBe(2);
+    });
+
+    it('should extract paragraph indentation from w:ind', () => {
+      const pNode = {
+        'w:pPr': {
+          'w:ind': {
+            '@_w:firstLine': '720',
+            '@_w:left': '360',
+            '@_w:right': '180',
+          },
+        },
+        'w:r': [{ 'w:t': 'Indented text' }],
+      };
+      const para = extractParagraph(pNode);
+      expect(para.indent).toEqual({
+        firstLine: 720,
+        left: 360,
+        right: 180,
+      });
+    });
+
+    it('should extract hanging indent and start/end attributes from w:ind', () => {
+      const pNode = {
+        'w:pPr': {
+          'w:ind': {
+            '@_w:hanging': '425',
+            '@_w:start': '993',
+            '@_w:end': '200',
+          },
+        },
+        'w:r': [{ 'w:t': 'Hanging text' }],
+      };
+      const para = extractParagraph(pNode);
+      expect(para.indent).toEqual({
+        hanging: 425,
+        left: 993,
+        right: 200,
+      });
+    });
+
+    it('should not set indent if all values in w:ind are 0 or negative', () => {
+      const pNodeZero = {
+        'w:pPr': {
+          'w:ind': {
+            '@_w:left': '0',
+            '@_w:right': '0',
+            '@_w:firstLine': '0',
+          },
+        },
+        'w:r': [{ 'w:t': 'Zero indent' }],
+      };
+      const paraZero = extractParagraph(pNodeZero);
+      expect(paraZero.indent).toBeUndefined();
+
+      const pNodeNegative = {
+        'w:pPr': {
+          'w:ind': {
+            '@_w:right': '-148',
+          },
+        },
+        'w:r': [{ 'w:t': 'Negative indent' }],
+      };
+      const paraNegative = extractParagraph(pNodeNegative);
+      expect(paraNegative.indent).toBeUndefined();
+    });
+
+    it('should inherit indent from styleMap when paragraph has no explicit indent', () => {
+      const stylesXml = `
+      <w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+        <w:style w:type="paragraph" w:styleId="BodyStyle">
+          <w:name w:val="Body Style"/>
+          <w:pPr>
+            <w:ind w:firstLine="567"/>
+          </w:pPr>
+        </w:style>
+      </w:styles>`;
+      const styleMap = extractStyleMap(stylesXml);
+      expect(styleMap.get('BodyStyle')?.indent).toEqual({ firstLine: 567 });
+
+      const pNode = {
+        'w:pPr': {
+          'w:pStyle': { '@_w:val': 'BodyStyle' },
+        },
+        'w:r': [{ 'w:t': 'Inherited indent text' }],
+      };
+      const para = extractParagraph(pNode, undefined, undefined, styleMap);
+      expect(para.indent).toEqual({ firstLine: 567 });
+    });
+
+    it('should inherit indent across basedOn inheritance chains in styleMap', () => {
+      const stylesXml = `
+      <w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+        <w:style w:type="paragraph" w:styleId="BaseStyle">
+          <w:name w:val="Base Style"/>
+          <w:pPr>
+            <w:ind w:left="720"/>
+          </w:pPr>
+        </w:style>
+        <w:style w:type="paragraph" w:styleId="DerivedStyle">
+          <w:name w:val="Derived Style"/>
+          <w:basedOn w:val="BaseStyle"/>
+        </w:style>
+      </w:styles>`;
+      const styleMap = extractStyleMap(stylesXml);
+      expect(styleMap.get('DerivedStyle')?.indent).toEqual({ left: 720 });
+
+      const pNode = {
+        'w:pPr': {
+          'w:pStyle': { '@_w:val': 'DerivedStyle' },
+        },
+        'w:r': [{ 'w:t': 'Inherited through basedOn' }],
+      };
+      const para = extractParagraph(pNode, undefined, undefined, styleMap);
+      expect(para.indent).toEqual({ left: 720 });
+    });
+
+    it('should prefer explicit paragraph indent over styleMap indent', () => {
+      const stylesXml = `
+      <w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+        <w:style w:type="paragraph" w:styleId="CustomStyle">
+          <w:pPr>
+            <w:ind w:firstLine="567"/>
+          </w:pPr>
+        </w:style>
+      </w:styles>`;
+      const styleMap = extractStyleMap(stylesXml);
+
+      const pNode = {
+        'w:pPr': {
+          'w:pStyle': { '@_w:val': 'CustomStyle' },
+          'w:ind': { '@_w:firstLine': '720' },
+        },
+        'w:r': [{ 'w:t': 'Overridden indent' }],
+      };
+      const para = extractParagraph(pNode, undefined, undefined, styleMap);
+      expect(para.indent).toEqual({ firstLine: 720 });
+    });
   });
 });
+
+
 

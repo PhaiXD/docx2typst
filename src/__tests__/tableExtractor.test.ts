@@ -353,4 +353,83 @@ describe('tableExtractor', () => {
     expect(tables[0].rows[0].cells[0].columnSpan).toBe(2);
     expect(tables[0].rows[0].cells[1].columnSpan).toBe(3);
   });
+
+  it('should extract table borders from w:tblBorders', () => {
+    const xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+    <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+      <w:body>
+        <w:tbl>
+          <w:tblPr>
+            <w:tblBorders>
+              <w:top w:val="single"/>
+              <w:bottom w:val="single"/>
+              <w:left w:val="none"/>
+              <w:right w:val="none"/>
+              <w:insideH w:val="single"/>
+              <w:insideV w:val="none"/>
+            </w:tblBorders>
+          </w:tblPr>
+          <w:tr>
+            <w:tc><w:p><w:r><w:t>A</w:t></w:r></w:p></w:tc>
+          </w:tr>
+        </w:tbl>
+      </w:body>
+    </w:document>`;
+
+    const body = getBodyNode(xml);
+    const tables = extractTables(body);
+    expect(tables[0].borders).toEqual({
+      top: true,
+      bottom: true,
+      left: false,
+      right: false,
+      insideH: true,
+      insideV: false,
+    });
+  });
+
+  it('should clear vertical borders when cells explicitly set left/right to nil', () => {
+    const xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+    <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+      <w:body>
+        <w:tbl>
+          <w:tblPr>
+            <w:tblBorders>
+              <w:top w:val="single"/>
+              <w:bottom w:val="single"/>
+              <w:left w:val="single"/>
+              <w:right w:val="single"/>
+              <w:insideH w:val="single"/>
+              <w:insideV w:val="single"/>
+            </w:tblBorders>
+          </w:tblPr>
+          <w:tr>
+            <w:tc>
+              <w:tcPr>
+                <w:tcBorders>
+                  <w:top w:val="single"/>
+                  <w:bottom w:val="single"/>
+                  <w:left w:val="nil"/>
+                  <w:right w:val="nil"/>
+                </w:tcBorders>
+              </w:tcPr>
+              <w:p><w:r><w:t>A</w:t></w:r></w:p>
+            </w:tc>
+          </w:tr>
+        </w:tbl>
+      </w:body>
+    </w:document>`;
+
+    const body = getBodyNode(xml);
+    const tables = extractTables(body);
+    expect(tables[0].borders).toEqual({
+      top: true,
+      bottom: true,
+      left: false,
+      right: false,
+      insideH: true,
+      insideV: false,
+    });
+  });
 });
+

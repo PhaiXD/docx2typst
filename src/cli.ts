@@ -192,7 +192,11 @@ export async function runCli(args: string[]): Promise<number> {
         content = text;
       } else {
         const rawContent = await readDocxFile(filePath);
-        let docxDoc = extractText(rawContent.documentXml, undefined, rawContent.imageMap);
+        let docxDoc = extractText(
+          rawContent.documentXml,
+          { stylesXml: rawContent.stylesXml },
+          rawContent.imageMap,
+        );
         if (rawContent.numberingXml) {
           const { numIdMap, abstractNumMap, abstractNumFmtMap } = extractNumberingMaps(
             rawContent.numberingXml,

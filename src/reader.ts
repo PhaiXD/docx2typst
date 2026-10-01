@@ -25,6 +25,11 @@ const DOCUMENT_RELS_XML_PATH = 'word/_rels/document.xml.rels';
 const NUMBERING_XML_PATH = 'word/numbering.xml';
 
 /**
+ * Path to the styles definitions XML inside the .docx ZIP package.
+ */
+const STYLES_XML_PATH = 'word/styles.xml';
+
+/**
  * Type guard checking whether a value is a non-null Record object.
  *
  * @param value - Value to check.
@@ -220,6 +225,17 @@ export async function readDocxFile(filePath: string): Promise<RawXmlContent> {
     }
   }
 
+  let stylesXml: string | undefined;
+  const stylesEntry = zip.file(STYLES_XML_PATH);
+  if (stylesEntry) {
+    try {
+      stylesXml = await stylesEntry.async('string');
+    } catch {
+      // Styles are optional; proceed without styles if read fails
+      stylesXml = undefined;
+    }
+  }
+
   // Parse relationships XML for image parts and construct imageMap
   const imageMap = new Map<string, DocxImage>();
   if (relationshipsXml) {
@@ -247,6 +263,7 @@ export async function readDocxFile(filePath: string): Promise<RawXmlContent> {
     documentXml,
     ...(relationshipsXml !== undefined ? { relationshipsXml } : {}),
     ...(numberingXml !== undefined ? { numberingXml } : {}),
+    ...(stylesXml !== undefined ? { stylesXml } : {}),
     imageMap,
     zipInstance: zip as unknown,
   };

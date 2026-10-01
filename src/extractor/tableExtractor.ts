@@ -4,7 +4,15 @@
  */
 
 import { extractParagraph } from './textExtractor.js';
-import type { DocxTable, Paragraph, TableCell, TableRow } from '../types.js';
+import type {
+  DocxImage,
+  DocxParserOptions,
+  DocxStyleInfo,
+  DocxTable,
+  Paragraph,
+  TableCell,
+  TableRow,
+} from '../types.js';
 
 /**
  * Type guard checking whether a value is a non-null Record object.
@@ -72,7 +80,12 @@ function getProperty(record: Record<string, unknown>, ...keys: string[]): unknow
  * @param bodyNode - The parsed `w:body` node from the document XML tree.
  * @returns An array of structured DocxTable objects.
  */
-export function extractTables(bodyNode: Record<string, unknown>): DocxTable[] {
+export function extractTables(
+  bodyNode: Record<string, unknown>,
+  options?: DocxParserOptions,
+  imageMap?: Map<string, DocxImage>,
+  styleMap?: Map<string, DocxStyleInfo>,
+): DocxTable[] {
   if (!isRecord(bodyNode)) {
     return [];
   }
@@ -100,35 +113,101 @@ export function extractTables(bodyNode: Record<string, unknown>): DocxTable[] {
       }
     }
 
+    // Extract table borders from w:tblPr > w:tblBorders
+    let borders: DocxTable['borders'] | undefined;
+    if (isRecord(tblPr)) {
+      const tblBordersNode = getProperty(tblPr, 'w:tblBorders', 'tblBorders');
+      if (isRecord(tblBordersNode)) {
+        const checkBorder = (nodeKey: string, aliasKey: string): boolean => {
+          const borderNode = getProperty(tblBordersNode, nodeKey, aliasKey);
+          if (isRecord(borderNode)) {
+            const val = getProperty(borderNode, '@_w:val', '@_val', '@w:val', 'val');
+            if (val !== undefined && val !== null) {
+              const valStr = String(val).toLowerCase().trim();
+              return valStr !== 'none' && valStr !== 'nil';
+            }
+          }
+          return false;
+        };
+
+        borders = {
+          top: checkBorder('w:top', 'top'),
+          bottom: checkBorder('w:bottom', 'bottom'),
+          left: checkBorder('w:left', 'left'),
+          right: checkBorder('w:right', 'right'),
+          insideH: checkBorder('w:insideH', 'insideH'),
+          insideV: checkBorder('w:insideV', 'insideV'),
+        };
+      }
+    }
+
     // Rows in table
     const trNodes = toArray<Record<string, unknown>>(getProperty(tblNode, 'w:tr', 'tr'));
+    let hasAnyCellBorders = false;
+    let hasCellExplicitlyRemovedVertical = false;
+    let hasAnyCellVerticalBorder = false;
 
-    // Determine columnCount: count w:tc in first row OR w:gridCol in w:tblGrid
+    // Determine columnCount: from w:tblGrid > w:gridCol OR first row gridSpan sum
     let columnCount = 0;
-    const firstRow = trNodes.length > 0 && isRecord(trNodes[0]) ? trNodes[0] : undefined;
-    if (firstRow) {
-      const firstRowCells = toArray(getProperty(firstRow, 'w:tc', 'tc'));
-      if (firstRowCells.length > 0) {
-        columnCount = firstRowCells.length;
+    const tblGrid = getProperty(tblNode, 'w:tblGrid', 'tblGrid');
+    if (isRecord(tblGrid)) {
+      const gridCols = toArray(getProperty(tblGrid, 'w:gridCol', 'gridCol'));
+      if (gridCols.length > 0) {
+        columnCount = gridCols.length;
       }
     }
-    if (columnCount === 0) {
-      const tblGrid = getProperty(tblNode, 'w:tblGrid', 'tblGrid');
-      if (isRecord(tblGrid)) {
-        const gridCols = toArray(getProperty(tblGrid, 'w:gridCol', 'gridCol'));
-        if (gridCols.length > 0) {
-          columnCount = gridCols.length;
-        }
-      }
-    }
+
     if (columnCount === 0 && trNodes.length > 0) {
       for (const r of trNodes) {
         if (isRecord(r)) {
-          const count = toArray(getProperty(r, 'w:tc', 'tc')).length;
-          if (count > columnCount) {
-            columnCount = count;
+          const tcList = toArray<Record<string, unknown>>(getProperty(r, 'w:tc', 'tc'));
+          let rowCols = 0;
+          for (const tc of tcList) {
+            let span = 1;
+            if (isRecord(tc)) {
+              const tcPr = getProperty(tc, 'w:tcPr', 'tcPr');
+              if (isRecord(tcPr)) {
+                const gs = getProperty(tcPr, 'w:gridSpan', 'gridSpan');
+                if (isRecord(gs)) {
+                  const val = getProperty(gs, '@_w:val', '@_val', '@w:val', 'val');
+                  const parsed = parseInt(String(val), 10);
+                  if (!isNaN(parsed)) span = parsed;
+                } else if (typeof gs === 'number') {
+                  span = Math.trunc(gs);
+                } else if (typeof gs === 'string') {
+                  const parsed = parseInt(gs, 10);
+                  if (!isNaN(parsed)) span = parsed;
+                }
+              }
+            }
+            rowCols += span;
+          }
+          if (rowCols > 0) {
+            columnCount = rowCols;
+            break;
           }
         }
+      }
+    }
+
+    // Extract column widths from w:tblGrid > w:gridCol
+    let columnWidths: number[] | undefined;
+    if (isRecord(tblGrid)) {
+      const gridCols = toArray(getProperty(tblGrid, 'w:gridCol', 'gridCol'));
+      const widths: number[] = [];
+      for (const gc of gridCols) {
+        if (isRecord(gc)) {
+          const w = getProperty(gc, '@_w:w', '@_w', '@w:w', 'w');
+          if (w !== undefined && w !== null) {
+            const parsed = parseInt(String(w), 10);
+            widths.push(!isNaN(parsed) ? parsed : 0);
+          } else {
+            widths.push(0);
+          }
+        }
+      }
+      if (widths.length > 0) {
+        columnWidths = widths;
       }
     }
 
@@ -151,6 +230,7 @@ export function extractTables(bodyNode: Record<string, unknown>): DocxTable[] {
         const tcPr = getProperty(tcNode, 'w:tcPr', 'tcPr');
         let columnSpan: number | undefined;
         let isVerticalMerge: boolean | undefined;
+        let vMerge: 'restart' | 'continue' | undefined;
 
         if (isRecord(tcPr)) {
           // Extract columnSpan from w:tcPr > w:gridSpan @w:val (default 1 if missing)
@@ -178,46 +258,81 @@ export function extractTables(bodyNode: Record<string, unknown>): DocxTable[] {
           const vMergeNode = getProperty(tcPr, 'w:vMerge', 'vMerge');
           if (vMergeNode !== undefined) {
             isVerticalMerge = true;
+            let val: string | undefined;
+            if (isRecord(vMergeNode)) {
+              const rawVal = getProperty(vMergeNode, '@_w:val', '@_val', '@w:val', 'val');
+              if (rawVal !== undefined && rawVal !== null) {
+                val = String(rawVal).toLowerCase().trim();
+              }
+            } else if (typeof vMergeNode === 'string') {
+              val = vMergeNode.toLowerCase().trim();
+            }
+
+            if (val === 'restart') {
+              vMerge = 'restart';
+            } else {
+              vMerge = 'continue';
+            }
+          }
+
+          // Check cell borders
+          const tcBorders = getProperty(tcPr, 'w:tcBorders', 'tcBorders');
+          if (isRecord(tcBorders)) {
+            hasAnyCellBorders = true;
+            for (const side of ['left', 'right'] as const) {
+              const bNode = getProperty(tcBorders, `w:${side}`, side);
+              if (isRecord(bNode)) {
+                const val = getProperty(bNode, '@_w:val', '@_val', '@w:val', 'val');
+                if (val !== undefined && val !== null) {
+                  const s = String(val).toLowerCase().trim();
+                  if (s === 'none' || s === 'nil') {
+                    hasCellExplicitlyRemovedVertical = true;
+                  } else {
+                    hasAnyCellVerticalBorder = true;
+                  }
+                }
+              }
+            }
           }
         }
 
         // Extract cell paragraphs
         const pNodes = toArray(getProperty(tcNode, 'w:p', 'p'));
-        const paragraphs: Paragraph[] = pNodes.map((pNode) => extractParagraph(pNode));
+        const paragraphs: Paragraph[] = pNodes.map((pNode) =>
+          extractParagraph(pNode, options, imageMap, styleMap),
+        );
 
-        // Extract text alignment from w:tcPr > w:jc @w:val OR from first paragraph's w:pPr > w:jc @w:val
-        let align: 'left' | 'center' | 'right' | undefined;
-        let jcNode: unknown;
-        if (isRecord(tcPr)) {
-          jcNode = getProperty(tcPr, 'w:jc', 'jc');
-        }
-        if (jcNode === undefined && pNodes.length > 0 && isRecord(pNodes[0])) {
-          const firstPPr = getProperty(pNodes[0], 'w:pPr', 'pPr');
-          if (isRecord(firstPPr)) {
-            jcNode = getProperty(firstPPr, 'w:jc', 'jc');
-          }
-        }
-
-        if (jcNode !== undefined) {
-          let jcVal: string | undefined;
-          if (isRecord(jcNode)) {
-            const val = getProperty(jcNode, '@_w:val', '@_val', '@w:val', 'val');
-            if (val !== undefined && val !== null) {
-              jcVal = String(val).toLowerCase().trim();
+        // Inherit table style spacing for cell paragraphs if not explicitly defined
+        const tableStyleInfo = style ? styleMap?.get(style) : undefined;
+        if (tableStyleInfo?.spacing) {
+          for (const p of paragraphs) {
+            if (!p.spacing) {
+              p.spacing = { ...tableStyleInfo.spacing };
             }
-          } else if (typeof jcNode === 'string') {
-            jcVal = jcNode.toLowerCase().trim();
           }
+        }
 
-          if (jcVal !== undefined) {
-            if (jcVal === 'center') {
-              align = 'center';
-            } else if (jcVal === 'right') {
-              align = 'right';
-            } else if (jcVal === 'left' || jcVal === 'both' || jcVal === 'justify') {
-              align = 'left';
-            } else {
-              align = 'left';
+        // Extract vertical alignment from w:tcPr > w:vAlign @w:val
+        let align: 'top' | 'horizon' | 'bottom' | undefined;
+        if (isRecord(tcPr)) {
+          const vAlignNode = getProperty(tcPr, 'w:vAlign', 'vAlign');
+          if (vAlignNode !== undefined) {
+            let vAlignVal: string | undefined;
+            if (isRecord(vAlignNode)) {
+              const val = getProperty(vAlignNode, '@_w:val', '@_val', '@w:val', 'val');
+              if (val !== undefined && val !== null) {
+                vAlignVal = String(val).toLowerCase().trim();
+              }
+            } else if (typeof vAlignNode === 'string') {
+              vAlignVal = vAlignNode.toLowerCase().trim();
+            }
+
+            if (vAlignVal === 'center') {
+              align = 'horizon';
+            } else if (vAlignVal === 'top') {
+              align = 'top';
+            } else if (vAlignVal === 'bottom') {
+              align = 'bottom';
             }
           }
         }
@@ -226,6 +341,7 @@ export function extractTables(bodyNode: Record<string, unknown>): DocxTable[] {
           paragraphs,
           ...(columnSpan !== undefined ? { columnSpan } : {}),
           ...(isVerticalMerge ? { isVerticalMerge: true } : {}),
+          ...(vMerge !== undefined ? { vMerge } : {}),
           ...(align !== undefined ? { align } : {}),
         };
 
@@ -236,9 +352,7 @@ export function extractTables(bodyNode: Record<string, unknown>): DocxTable[] {
 
         cells.push(cell);
 
-        if (!isVerticalMerge) {
-          consumed += columnSpan ?? 1;
-        }
+        consumed += columnSpan ?? 1;
       }
 
       // Drop trailing phantom cells (isVerticalMerge=true and isEmpty) if exceeding columnCount
@@ -330,14 +444,116 @@ export function extractTables(bodyNode: Record<string, unknown>): DocxTable[] {
             }
           }
         }
+        if (columnWidths && spacerCol < columnWidths.length) {
+          const removedWidth = columnWidths[spacerCol];
+          columnWidths.splice(spacerCol, 1);
+          if (spacerCol > 0 && columnWidths.length > 0) {
+            columnWidths[spacerCol - 1] += removedWidth;
+          }
+        }
         columnCount = newColCount;
       }
+    }
+
+    // Calculate rowSpan for vMerge='restart' cells
+    for (let r = 0; r < rows.length; r++) {
+      let colIdx = 0;
+      for (const cell of rows[r].cells) {
+        const span = cell.columnSpan ?? 1;
+        if (cell.vMerge === 'restart') {
+          let rowSpan = 1;
+          for (let nextR = r + 1; nextR < rows.length; nextR++) {
+            let nextCol = 0;
+            let matchingCell: TableCell | undefined;
+            for (const c of rows[nextR].cells) {
+              if (nextCol === colIdx) {
+                matchingCell = c;
+                break;
+              }
+              nextCol += c.columnSpan ?? 1;
+            }
+            if (matchingCell && matchingCell.vMerge === 'continue') {
+              rowSpan++;
+            } else {
+              break;
+            }
+          }
+          if (rowSpan > 1) {
+            cell.rowSpan = rowSpan;
+          }
+        }
+        colIdx += span;
+      }
+    }
+
+    let hasBorderTop = false;
+    let hasBorderBottom = false;
+
+    if (rows.length > 0) {
+      const firstRow = rows[0];
+      if (firstRow.cells.some((cell) => cell.paragraphs.some((p) => p.hasBorderTop))) {
+        hasBorderTop = true;
+      }
+    }
+
+    if (hasBorderTop && trNodes.length > 0) {
+      const lastTrNode = trNodes[trNodes.length - 1];
+      if (isRecord(lastTrNode)) {
+        const lastTcNodes = toArray<Record<string, unknown>>(
+          getProperty(lastTrNode, 'w:tc', 'tc'),
+        );
+        for (const tc of lastTcNodes) {
+          if (isRecord(tc)) {
+            const tcPr = getProperty(tc, 'w:tcPr', 'tcPr');
+            if (isRecord(tcPr)) {
+              const tcBorders = getProperty(tcPr, 'w:tcBorders', 'tcBorders');
+              if (isRecord(tcBorders)) {
+                const bottomBdr = getProperty(tcBorders, 'w:bottom', 'bottom');
+                if (isRecord(bottomBdr)) {
+                  const val = getProperty(bottomBdr, '@_w:val', '@_val', '@w:val', 'val');
+                  if (typeof val === 'string' && val.toLowerCase() !== 'none' && val.toLowerCase() !== 'nil') {
+                    hasBorderBottom = true;
+                    break;
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+      if (!hasBorderBottom && rows.length > 0) {
+        const lastRow = rows[rows.length - 1];
+        if (lastRow.cells.some((cell) => cell.paragraphs.some((p) => p.hasBorderBottom))) {
+          hasBorderBottom = true;
+        }
+      }
+    }
+
+    if (borders) {
+      if (hasCellExplicitlyRemovedVertical || (hasAnyCellBorders && !hasAnyCellVerticalBorder)) {
+        borders.left = false;
+        borders.right = false;
+        borders.insideV = false;
+      }
+    } else if (hasAnyCellBorders) {
+      borders = {
+        top: hasBorderTop,
+        bottom: hasBorderBottom,
+        left: hasAnyCellVerticalBorder,
+        right: hasAnyCellVerticalBorder,
+        insideH: false,
+        insideV: hasAnyCellVerticalBorder,
+      };
     }
 
     const table: DocxTable = {
       rows,
       columnCount,
+      ...(columnWidths && columnWidths.length === columnCount ? { columnWidths } : {}),
       ...(style !== undefined ? { style } : {}),
+      ...(borders !== undefined ? { borders } : {}),
+      ...(hasBorderTop ? { hasBorderTop: true } : {}),
+      ...(hasBorderBottom ? { hasBorderBottom: true } : {}),
     };
     tables.push(table);
   }
