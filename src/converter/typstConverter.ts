@@ -24,7 +24,7 @@ import type {
  * @returns Escaped text string suitable for Typst markup.
  */
 function escapeTypstText(text: string): string {
-  return text.replace(/[\\#@<>`]/g, (char) => `\\${char}`);
+  return text.replace(/[\\#@<>`$*_]/g, (char) => `\\${char}`);
 }
 
 /**
@@ -302,9 +302,17 @@ function convertParagraphToTypst(
 
       const text = escape ? escapeTypstText(rawHeadingText) : rawHeadingText;
       const trimmed = text.trim();
+      let styledText = trimmed;
+      if (trimmed.length > 0 && para.color) {
+        let hex = para.color;
+        if (!hex.startsWith('#') && /^[0-9A-Fa-f]{6}$/.test(hex)) {
+          hex = `#${hex}`;
+        }
+        styledText = `#text(fill: rgb("${hex}"))[${trimmed}]`;
+      }
       const marker = '='.repeat(headingLevel);
 
-      let headingMarkup = trimmed.length > 0 ? `${marker} ${trimmed}` : `${marker} `;
+      let headingMarkup = styledText.length > 0 ? `${marker} ${styledText}` : `${marker} `;
       
       if (para.runs && para.runs.some((r) => r.horizontalLine)) {
         headingMarkup = `${headingMarkup}\n#line(length: 100%)`;
@@ -323,6 +331,13 @@ function convertParagraphToTypst(
       if (runs.length > 0) {
         const content = joinConvertedRuns(runs, escape);
         textContent = content.trim();
+        if (textContent.length > 0 && para.color) {
+          let hex = para.color;
+          if (!hex.startsWith('#') && /^[0-9A-Fa-f]{6}$/.test(hex)) {
+            hex = `#${hex}`;
+          }
+          textContent = `#text(fill: rgb("${hex}"))[${textContent}]`;
+        }
       }
     }
 
@@ -447,6 +462,14 @@ function convertCellToTypst(
       strokeParts.push(`right: ${r}`);
       attrs.push(`stroke: (${strokeParts.join(', ')})`);
     }
+  }
+
+  if (cell.fill) {
+    let hex = cell.fill;
+    if (!hex.startsWith('#') && /^[0-9A-Fa-f]{6}$/.test(hex)) {
+      hex = `#${hex}`;
+    }
+    attrs.push(`fill: rgb("${hex}")`);
   }
 
   if (attrs.length > 0) {

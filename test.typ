@@ -364,7 +364,7 @@ _(example: behavior, pregnant women, nutritional status)_
   + Conference papers - online
   
   #[#set par(justify: true);
-  #pad(left: 1.25cm)[#h(-0.75cm)Bochner, S. 1996, November. _Mentoring in higher education: Issues to be addressed in developing a mentoring program._ Paper presented at the Australian Association for Research in Education Conference, Singapore. Diakses dari #underline[http://www.aare.edu.au/96pap/bochs96018.txt]]
+  #pad(left: 1.25cm)[#h(-0.75cm)Bochner, S. 1996, November. _Mentoring in higher education: Issues to be addressed in developing a mentoring program._ Paper presented at the Australian Association for Research in Education Conference, Singapore. Diakses dari #link("http://www.aare.edu.au/96pap/bochs96018.txt")[#underline[http://www.aare.edu.au/96pap/bochs96018.txt]]]
   ]
   
   
@@ -412,11 +412,11 @@ _(example: behavior, pregnant women, nutritional status)_
   + Journal (internet version)
   
   #[#set par(justify: true);
-  #pad(left: 1.25cm)[#h(-0.75cm)#text(fill: rgb("0000ff"))[Snell, D., & Hodgetts, D. (n.d.). The psychology of heavy metal communities and white supremacy.] #text(fill: rgb("0000ff"))[_Te Kura Kete Aronui_] #text(fill: rgb("0000ff"))[,] #text(fill: rgb("0000ff"))[_1_] #text(fill: rgb("0000ff"))[. Available at:] #text(fill: rgb("0000ff"))[#underline[.]] #text(fill: rgb("0000ff"))[#underline[http://www.waikato.ac.nz/wfass/tkka]]]
+  #pad(left: 1.25cm)[#h(-0.75cm)#text(fill: rgb("0000ff"))[Snell, D., & Hodgetts, D. (n.d.). The psychology of heavy metal communities and white supremacy.] #text(fill: rgb("0000ff"))[_Te Kura Kete Aronui_] #text(fill: rgb("0000ff"))[,] #text(fill: rgb("0000ff"))[_1_] #text(fill: rgb("0000ff"))[. Available at:] #link("http://www.waikato.ac.nz/wfass/tkka")[#text(fill: rgb("0000ff"))[#underline[http://www.waikato.ac.nz/wfass/tkka]]] #text(fill: rgb("0000ff"))[#underline[.]]]
   ]
   
   #[#set par(justify: true);
-  #pad(left: 1.25cm)[#h(-0.75cm)Suparwati, K., Muliarta, I. dan Irfan, M. 2017. Senam Tai Chi Lebih Efektif Meningkatkan Fleksibilitas Dan Keseimbangan Daripada Senam Bugar Lansia Pada Lansia Di Kota Denpasar, _Sport and Fitness Journal_, 5(1), pp. 82–93. Diakses dari: .#underline[https://ojs.unud.ac.id/index.php/sport/article/view/28880]]
+  #pad(left: 1.25cm)[#h(-0.75cm)Suparwati, K., Muliarta, I. dan Irfan, M. 2017. Senam Tai Chi Lebih Efektif Meningkatkan Fleksibilitas Dan Keseimbangan Daripada Senam Bugar Lansia Pada Lansia Di Kota Denpasar, _Sport and Fitness Journal_, 5(1), pp. 82–93. Diakses dari: #link("https://ojs.unud.ac.id/index.php/sport/article/view/28880")[#underline[https://ojs.unud.ac.id/index.php/sport/article/view/28880]].]
   ]
   
   #[#set par(justify: true);
@@ -438,7 +438,7 @@ _(example: behavior, pregnant women, nutritional status)_
   + Skripsi (undergraduated thesis) / Tesis (thesis) / Disertasi (dissertation) – web version
   
   #[#set par(justify: true);
-  #pad(left: 1.25cm)[#h(-0.75cm)Dewstow, R. A. 2006. _Using the Internet to enhance teaching at the University of Waikato_ (Master’s thesis, University of Waikato, Hamilton, New Zealand). Diakses dari #underline[http://researchcommons.waikato.ac.nz/handle/10289/2241]]
+  #pad(left: 1.25cm)[#h(-0.75cm)Dewstow, R. A. 2006. _Using the Internet to enhance teaching at the University of Waikato_ (Master’s thesis, University of Waikato, Hamilton, New Zealand). Diakses dari #link("http://researchcommons.waikato.ac.nz/handle/10289/2241")[#underline[http://researchcommons.waikato.ac.nz/handle/10289/2241]]]
   ]
   
   
@@ -446,7 +446,7 @@ _(example: behavior, pregnant women, nutritional status)_
   + *Web*
   
   #[#set par(justify: true);
-  #pad(left: 1.25cm)[#h(-0.75cm)Statistics New Zealand. 2007. _New Zealand in profile 2007._ Diakses dari #underline[http://www.stats.govt.nz]]
+  #pad(left: 1.25cm)[#h(-0.75cm)Statistics New Zealand. 2007. _New Zealand in profile 2007._ Diakses dari #link("http://www.stats.govt.nz")[#underline[http://www.stats.govt.nz]]]
   ]
   
   

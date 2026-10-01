@@ -232,6 +232,7 @@ export function extractTables(
         let isVerticalMerge: boolean | undefined;
         let vMerge: 'restart' | 'continue' | undefined;
         let cellBorders: { top?: boolean; bottom?: boolean; left?: boolean; right?: boolean } | undefined;
+        let cellFill: string | undefined;
 
         if (isRecord(tcPr)) {
           // Extract columnSpan from w:tcPr > w:gridSpan @w:val (default 1 if missing)
@@ -273,6 +274,15 @@ export function extractTables(
               vMerge = 'restart';
             } else {
               vMerge = 'continue';
+            }
+          }
+
+          // Extract cell background color (shading)
+          const shdNode = getProperty(tcPr, 'w:shd', 'shd');
+          if (isRecord(shdNode)) {
+            const fillVal = getProperty(shdNode, '@_w:fill', '@_fill', '@w:fill', 'fill');
+            if (fillVal !== undefined && fillVal !== null && fillVal !== 'auto') {
+              cellFill = String(fillVal).trim();
             }
           }
 
@@ -351,6 +361,7 @@ export function extractTables(
           ...(vMerge !== undefined ? { vMerge } : {}),
           ...(align !== undefined ? { align } : {}),
           ...(cellBorders !== undefined ? { borders: cellBorders } : {}),
+          ...(cellFill !== undefined ? { fill: cellFill } : {}),
         };
 
         // If logical cells already satisfy columnCount, skip extra phantom cells

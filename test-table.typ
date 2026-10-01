@@ -1,1 +1,0 @@
-#table(columns: 2, stroke: 1pt, table.cell(stroke: (left: none, right: none))[A], [B])

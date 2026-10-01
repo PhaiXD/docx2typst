@@ -154,6 +154,11 @@ export interface DocxStyleInfo {
    * Whether this is a default style.
    */
   isDefault?: boolean;
+
+  /**
+   * The text color defined by this style (hex string).
+   */
+  color?: string;
 }
 
 /**
@@ -324,6 +329,11 @@ export interface Paragraph {
   style?: string;
 
   /**
+   * Font color for the paragraph (hex string), inherited from its style or directly applied.
+   */
+  color?: string;
+
+  /**
    * Indicates whether the paragraph has no text content.
    */
   isEmpty?: boolean;
@@ -421,6 +431,11 @@ export interface TableCell {
    * Cell vertical alignment in Typst ('top' | 'horizon' | 'bottom' | 'left' | 'center' | 'right').
    */
   align?: 'top' | 'horizon' | 'bottom' | 'left' | 'center' | 'right' | string;
+
+  /**
+   * Cell background fill color (e.g. hex code).
+   */
+  fill?: string;
 }
 
 /**

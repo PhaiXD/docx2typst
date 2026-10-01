@@ -590,6 +590,18 @@ export function extractStyleMap(stylesXml: string): Map<string, DocxStyleInfo> {
       }
     }
 
+    let color: string | undefined;
+    const rPr = getProperty(styleNode, 'w:rPr', 'rPr');
+    if (isRecord(rPr)) {
+      const colorNode = getProperty(rPr, 'w:color', 'color');
+      if (isRecord(colorNode)) {
+        const val = getProperty(colorNode, '@_w:val', '@_val', '@w:val', 'val');
+        if (val !== undefined && val !== null && val !== 'auto') {
+          color = String(val).trim();
+        }
+      }
+    }
+
     const info: DocxStyleInfo = {
       styleId: styleIdStr,
       ...(name !== undefined ? { name } : {}),
@@ -598,6 +610,7 @@ export function extractStyleMap(stylesXml: string): Map<string, DocxStyleInfo> {
       ...(indent !== undefined ? { indent } : {}),
       ...(spacing !== undefined ? { spacing } : {}),
       ...(isDefault ? { isDefault: true } : {}),
+      ...(color !== undefined ? { color } : {}),
     };
 
     map.set(styleIdStr, info);
@@ -924,6 +937,15 @@ export function extractParagraph(
     }
   }
 
+  // Inherit color from style if defined
+  let color: string | undefined;
+  if (style !== undefined && styleMap) {
+    const styleInfo = styleMap.get(style);
+    if (styleInfo?.color) {
+      color = styleInfo.color;
+    }
+  }
+
   // Check for paragraph borders (w:pBdr / pBdr)
   let hasBorderTop: boolean | undefined;
   let hasBorderBottom: boolean | undefined;
@@ -967,6 +989,7 @@ export function extractParagraph(
     text,
     runs,
     ...(style !== undefined ? { style } : {}),
+    ...(color !== undefined ? { color } : {}),
     ...(align !== undefined ? { align } : {}),
     ...(indent !== undefined ? { indent } : {}),
     ...(spacing !== undefined ? { spacing } : {}),
