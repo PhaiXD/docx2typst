@@ -44,7 +44,7 @@ export function parseXml(xmlString: string): Record<string, unknown> {
     /<w:hyperlink[^>]*r:id="([^"]+)"[^>]*>(.*?)<\/w:hyperlink>/gs,
     (match, rId, content) => {
       return content.replace(/<w:r(?: [^>]+)?>/g, (rTag: string) => {
-        return rTag + `<w:rPr><w:linkTarget w:val="${rId}"/></w:rPr>`;
+        return rTag + `<w:linkTarget w:val="${rId}"/>`;
       });
     }
   );

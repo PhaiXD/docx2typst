@@ -289,15 +289,16 @@ function extractRun(
       }
     }
 
-    const linkNode = getProperty(rPr, 'w:linkTarget', 'linkTarget');
-    if (isRecord(linkNode)) {
-      const linkId = String(getProperty(linkNode, '@_w:val', '@_val', '@w:val', 'val'));
-      if (linkId && hyperlinkMap?.has(linkId)) {
-        linkTarget = hyperlinkMap.get(linkId);
-      }
-    }
   } else if (defaultColor) {
     color = defaultColor;
+  }
+
+  const linkNode = getProperty(rNode, 'w:linkTarget', 'linkTarget');
+  if (isRecord(linkNode)) {
+    const linkId = String(getProperty(linkNode, '@_w:val', '@_val', '@w:val', 'val'));
+    if (linkId && hyperlinkMap?.has(linkId)) {
+      linkTarget = hyperlinkMap.get(linkId);
+    }
   }
 
   // Extract text nodes (w:t)

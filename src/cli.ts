@@ -196,6 +196,7 @@ export async function runCli(args: string[]): Promise<number> {
           rawContent.documentXml,
           { stylesXml: rawContent.stylesXml },
           rawContent.imageMap,
+          rawContent.hyperlinkMap
         );
         if (rawContent.numberingXml) {
           const { numIdMap, abstractNumMap, abstractNumFmtMap } = extractNumberingMaps(
