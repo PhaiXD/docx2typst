@@ -224,6 +224,11 @@ export interface TextRun {
    * Whether this run contains an inline page break (`w:br w:type="page"`).
    */
   pageBreak?: boolean;
+
+  /**
+   * Whether this run represents a horizontal line (w:pict/v:rect with o:hr="t").
+   */
+  horizontalLine?: boolean;
 }
 
 /**

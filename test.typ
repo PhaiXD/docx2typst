@@ -87,7 +87,7 @@ _(example: behavior, pregnant women, nutritional status)_
   *INTRODUCTION (bold, space 1)*
   
   #[#set par(justify: true);
-  #h(1.00cm)The introduction contains background problems followed by several literature reviews, identification of problems with the inverted pyramid method starting from global, national, local and ending research objectives. Also write the state of art and novelty from your research here. The entire introduction is presented in an integrated manner in the form of paragraphs, with the length of the introduction 15% -20% of the total length of the article. Each paragraph starts with words that are indented into five digits.
+  #h(1.00cm)The introduction contains background problems followed by several literature reviews, identification of problems with the inverted pyramid method starting from global, national, local and ending research objectives. Also write the state of art and novelty from your research here. The entire introduction is presented in an integrated manner in the form of paragraphs, with the length of the introduction 15% -20% of the total length of the article. #text(fill: rgb("111111"))[Each paragraph starts with words that are indented into five digits.]
   ]
   
   
@@ -99,7 +99,7 @@ _(example: behavior, pregnant women, nutritional status)_
   ]
   
   #[#set par(justify: true);
-  #h(1.00cm)The paragraph starts with words that are indented into five digits. In the method section of this research, if there are ethical test results, they can be listed (number, location, and date of ethical testing).
+  #h(1.00cm)#text(fill: rgb("111111"))[The paragraph starts with words that are indented into five digits] #text(fill: rgb("111111"))[.] In the method section of this research, if there are ethical test results, they can be listed (number, location, and date of ethical testing).
   ]
   
   
@@ -196,7 +196,7 @@ _(example: behavior, pregnant women, nutritional status)_
   ]
   
   #[#set par(justify: true);
-  #h(1.00cm)The discussion contains the interpretation of results and comparisons with the theory, literature, or the results of relevant previous research. The reference library looks at the proportion of issues published in the last 10 years. Each research result must be discussed as deeply as possible. The length of exposure is 20% -60% of the total article length. Each paragraph starts with words that are indented into five digits.
+  #h(1.00cm)The discussion contains the interpretation of results and comparisons with the theory, literature, or the results of relevant previous research. The reference library looks at the proportion of issues published in the last 10 years. Each research result must be discussed as deeply as possible. The length of exposure is 20% -60% of the total article length. #text(fill: rgb("111111"))[Each paragraph starts with words that are indented into five digits.]
   ]
   
   
@@ -236,7 +236,7 @@ _(example: behavior, pregnant women, nutritional status)_
   ]
   
   #[#set par(justify: true);
-  #h(1.00cm)The acknowledgments are mainly addressed to research funders or donors. Acknowledgments can also be conveyed to those who helped carry out the research. Each paragraph starts with words that are indented into five digits.
+  #h(1.00cm)The acknowledgments are mainly addressed to research funders or donors. Acknowledgments can also be conveyed to those who helped carry out the research. #text(fill: rgb("111111"))[Each paragraph starts with words that are indented into five digits.]
   ]
   
   

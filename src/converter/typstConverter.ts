@@ -67,47 +67,23 @@ export function getHeadingLevel(style: string | undefined): number | null {
  * @returns The converted Typst markup string for this run.
  */
 function convertRunToTypst(run: TextRun, escape: boolean = true): string {
+  const rawText = run.text || '';
+  let text = escape ? escapeTypstText(rawText) : rawText;
+
+  // Handle horizontal line
+  let horizontalLineMarkup = '';
+  if (run.horizontalLine) {
+    horizontalLineMarkup = '#line(length: 100%)\n';
+  }
+
+  // Handle page break
+  let pageBreakMarkup = '';
   if (run.pageBreak) {
-    const rawText = run.text || '';
-    if (rawText.trim().length === 0) {
-      return '\n#colbreak()\n';
-    }
-    const text = escape ? escapeTypstText(rawText) : rawText;
-    const match = text.match(/^(\s*)(.*?)(\s*)$/s);
-    const leadingWs = match ? match[1] : '';
-    const coreText = match ? match[2] : text;
-    const trailingWs = match ? match[3] : '';
-
-    let formatted = coreText;
-    if (run.italic) {
-      formatted = `_${formatted}_`;
-    }
-    if (run.bold) {
-      formatted = `*${formatted}*`;
-    }
-    if (run.underline) {
-      formatted = `#underline[${formatted}]`;
-    }
-    if (run.color) {
-      formatted = `#text(fill: rgb("${run.color}"))[${formatted}]`;
-    }
-    return `\n#colbreak()\n${leadingWs}${formatted}${trailingWs}`;
+    pageBreakMarkup = '\n#colbreak()\n';
   }
 
-  if (!run.text || run.text.length === 0) {
-    return '';
-  }
-
-  const text = escape ? escapeTypstText(run.text) : run.text;
-
-  // If no formatting is active, return the text directly
-  if (!run.bold && !run.italic && !run.underline && !run.color) {
-    return text;
-  }
-
-  // If text is purely whitespace, formatting markers cannot attach to non-whitespace
   if (text.trim().length === 0) {
-    return text;
+    return `${pageBreakMarkup}${horizontalLineMarkup}${text}`;
   }
 
   // Extract leading and trailing whitespace to keep formatting markers touching the word
@@ -118,27 +94,21 @@ function convertRunToTypst(run: TextRun, escape: boolean = true): string {
 
   let formatted = coreText;
 
-  // Italic is innermost
+  // Apply formatting only to the non-whitespace core
   if (run.italic) {
     formatted = `_${formatted}_`;
   }
-
-  // Bold wraps around italic
   if (run.bold) {
     formatted = `*${formatted}*`;
   }
-
-  // Underline is outermost
   if (run.underline) {
     formatted = `#underline[${formatted}]`;
   }
-
-  // Color wraps around underline
   if (run.color) {
     formatted = `#text(fill: rgb("${run.color}"))[${formatted}]`;
   }
 
-  return `${leadingWs}${formatted}${trailingWs}`;
+  return `${pageBreakMarkup}${horizontalLineMarkup}${leadingWs}${formatted}${trailingWs}`;
 }
 
 /**
@@ -328,7 +298,13 @@ function convertParagraphToTypst(
       const trimmed = text.trim();
       const marker = '='.repeat(headingLevel);
 
-      textContent = trimmed.length > 0 ? `${marker} ${trimmed}` : `${marker} `;
+      let headingMarkup = trimmed.length > 0 ? `${marker} ${trimmed}` : `${marker} `;
+      
+      if (para.runs && para.runs.some((r) => r.horizontalLine)) {
+        headingMarkup = `${headingMarkup}\n#line(length: 100%)`;
+      }
+      
+      textContent = headingMarkup;
     } else {
       // Normal paragraph: format individual runs and handle whitespace
       const runs =
@@ -584,7 +560,11 @@ export function convertDocxToTypst(
   let headingCount = 0;
   let runsWithFormatting = 0;
 
-  for (const para of doc.paragraphs) {
+  const docItems = doc.bodyItems || (doc.paragraphs ? doc.paragraphs.map(p => ({ type: 'paragraph', paragraph: p } as any)) : []);
+
+  for (const item of docItems) {
+    if (item.type !== 'paragraph') continue;
+    const para = item.paragraph;
     const headingLevel = para.listItem ? null : getHeadingLevel(para.style);
     if (headingLevel !== null) {
       headingCount++;

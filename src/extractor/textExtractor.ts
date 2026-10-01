@@ -251,9 +251,12 @@ function extractRun(
 
     const colorNode = getProperty(rPr, 'w:color', 'color');
     if (isRecord(colorNode)) {
-      const colorVal = getProperty(colorNode, '@_w:val', '@_val', '@w:val', 'val');
-      if (colorVal && typeof colorVal === 'string' && colorVal !== 'auto' && colorVal !== '000000') {
-        color = colorVal;
+      const colorValRaw = getProperty(colorNode, '@_w:val', '@_val', '@w:val', 'val');
+      if (colorValRaw !== undefined && colorValRaw !== 'auto') {
+        const colorVal = String(colorValRaw).padStart(6, '0');
+        if (colorVal !== '000000') {
+          color = colorVal;
+        }
       }
     } else if (defaultColor) {
       color = defaultColor;
@@ -298,6 +301,19 @@ function extractRun(
     }
   }
 
+  // Check for horizontal line in w:pict
+  let horizontalLine = false;
+  const pictNode = getProperty(rNode, 'w:pict', 'pict');
+  if (isRecord(pictNode)) {
+    const rectNode = getProperty(pictNode, 'v:rect', 'rect');
+    if (isRecord(rectNode)) {
+      const hrAttr = getProperty(rectNode, '@_o:hr', '@_hr', '@o:hr', 'hr');
+      if (hrAttr === 't' || hrAttr === true || hrAttr === 'true') {
+        horizontalLine = true;
+      }
+    }
+  }
+
   // Return run even if text is empty, as long as it was a valid run element
   const run: TextRun = {
     text,
@@ -306,6 +322,7 @@ function extractRun(
     ...(underline ? { underline: true } : {}),
     ...(color ? { color } : {}),
     ...(pageBreak ? { pageBreak: true } : {}),
+    ...(horizontalLine ? { horizontalLine: true } : {}),
   };
 
   return run;
@@ -611,6 +628,22 @@ export function extractParagraph(
       const styleVal = getProperty(pStyleRaw, '@_w:val', '@_val');
       if (styleVal !== undefined && styleVal !== null) {
         style = String(styleVal);
+        
+        // If it's a heading, but the paragraph explicitly removes bold, downgrade it to a normal paragraph.
+        // This handles cases where MS Word users abuse heading styles for spacing but unbold the text.
+        if (/^heading/i.test(style)) {
+          const prRPrRaw = getProperty(pPr, 'w:rPr', 'rPr');
+          if (isRecord(prRPrRaw)) {
+            const prBoldRaw = getProperty(prRPrRaw, 'w:b', 'b');
+            if (prBoldRaw !== undefined) {
+              const val = getProperty(prBoldRaw as any, '@_w:val', '@_val');
+              const valStr = val !== undefined ? String(val).toLowerCase().trim() : '';
+              if (valStr === 'false' || valStr === '0' || valStr === 'off') {
+                style = undefined;
+              }
+            }
+          }
+        }
       }
     }
   }
