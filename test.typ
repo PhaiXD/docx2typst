@@ -1,4 +1,4 @@
-#align(center)[#underline[*WRITING TECHNIQUES OF RESEARCH ARTICLES START 2020*]]
+#underline[*WRITING TECHNIQUES OF RESEARCH ARTICLES START 2020*]
 
 
 
@@ -6,7 +6,7 @@
 
 #align(center)[*_Title Written in_* *Indonesian* *_(Capital Each Word except conjunction is  lowercase, TNR 11, Bold, Space 1 center) (Write The Study Design Used)_*]
 
-#align(center)[#text(fill: rgb("ff0000"))[*(Do not include the name of the author, agency, and e-mail in the article. All three will be written in the title page article format)*]]
+#text(fill: rgb("ff0000"))[*(Do not include the name of the author, agency, and e-mail in the article. All three will be written in the title page article format)*]
 
 
 

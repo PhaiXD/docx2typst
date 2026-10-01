@@ -1067,63 +1067,7 @@ export function extractText(
     ];
   }
 
-  // If a Paper-Title or Title style specifies center alignment, apply to the unstyled first title paragraph
-  if (styleMap && styleMap.size > 0 && orderedParagraphs.length > 0) {
-    const firstP = orderedParagraphs.find((p) => !p.isEmpty && p.text.trim().length > 0);
-    if (firstP && !firstP.style && !firstP.align) {
-      const paperTitleStyle = styleMap.get('Paper-Title') ?? styleMap.get('Title');
-      if (paperTitleStyle?.align === 'center') {
-        const hasTitleFormatting = firstP.runs.some((r) => r.bold || r.underline);
-        if (hasTitleFormatting) {
-          firstP.align = 'center';
-        }
-      }
-    }
-  }
 
-  // Heuristic for title block / preamble paragraphs:
-  // In the document preamble (before the first table or heading),
-  // if all preceding non-empty paragraphs are centered, any unstyled paragraph with metadata/title formatting
-  // (e.g. bold, colored text, or parenthesized author note) or following a centered title block is centered.
-  let precedingCenteredCount = 0;
-  for (const item of bodyItems) {
-    if (item.type === 'table') {
-      break;
-    }
-    const p = item.paragraph;
-    if (p.isEmpty || p.text.trim().length === 0) {
-      continue;
-    }
-    if (p.style && /^heading\s*[1-6]$/i.test(p.style.trim())) {
-      break;
-    }
-    if (p.align === 'center') {
-      precedingCenteredCount++;
-      continue;
-    }
-    if (!p.align && !p.style && precedingCenteredCount > 0) {
-      const hasMetadataStyle =
-        p.runs.some((r) => r.bold || r.color || r.italic) ||
-        (p.text.trim().startsWith('(') && p.text.trim().endsWith(')'));
-      if (hasMetadataStyle) {
-        p.align = 'center';
-        precedingCenteredCount++;
-        continue;
-      }
-    }
-    break;
-  }
-
-  // Also heuristic for unstyled paragraphs between two centered paragraphs (ignoring empty paragraphs)
-  const nonEmptyParas = orderedParagraphs.filter((p) => !p.isEmpty && p.text.trim().length > 0);
-  for (let i = 1; i < nonEmptyParas.length - 1; i++) {
-    const prev = nonEmptyParas[i - 1];
-    const curr = nonEmptyParas[i];
-    const next = nonEmptyParas[i + 1];
-    if (!curr.align && !curr.style && prev.align === 'center' && next.align === 'center') {
-      curr.align = 'center';
-    }
-  }
 
   const text = orderedParagraphs.map((p) => p.text).join('\n');
 
