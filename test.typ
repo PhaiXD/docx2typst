@@ -12,7 +12,7 @@
 
 #table(
   columns: (23%, 3%, 73%),
-  stroke: 1pt,
+  stroke: none,
   table.cell(stroke: (top: none, bottom: 1pt, left: none, right: none))[#set par(spacing: 0.5em); #line(length: 100%)
 *ARTICLE INFO*
 
@@ -42,7 +42,7 @@ Published online October, 4th 2019
 
 #v(1em)
 
-#v(1em)], table.cell(stroke: (top: none, bottom: none, left: none, right: none))[#set par(spacing: 0.5em); #v(1em)], table.cell(stroke: (top: 1pt, bottom: 1pt, left: none, right: none))[#set par(spacing: 0.5em); #align(center)[*_ABSTRACT_*]
+#v(1em)], [#set par(spacing: 0.5em); #v(1em)], table.cell(stroke: (top: 1pt, bottom: 1pt, left: none, right: none))[#set par(spacing: 0.5em); #align(center)[*_ABSTRACT_*]
 
 #par(justify: true)[#h(1.06cm)_The abstract is written in two languages, English and Indonesian, a maximum of 250 words. The abstract is written in Times New Roman 10 letters, spaced 1 in 1 column format._ *_Background_* _: contains the background of the problem, some literature studies, identification of research problems._ *_Purpose_* _: Contains research objectives that are described in a concise, clear, and concise manner._ *_Methods_* _: It contains research designs, research objectives (population and samples), data sources, data collection techniques and instruments, and data analysis._ *_Results_* _: The results of the study can be explained with the sentence as an example "the study shows the relationship of environmental factors with the incidence of tuberculosis in children because p = 0.02 \<α = 0.05"._ *_Conclusion_* _: contains research findings in the form of answers to questions and research objectives in the form of the core of the research._]
 
@@ -97,12 +97,12 @@ Published online October, 4th 2019
 
 #table(
   columns: (20%, 18%, 18%, 22%, 22%),
-  stroke: 1pt,
-  table.cell(rowspan: 2, align: horizon)[#set par(spacing: 0.5em); #align(center)[*Exposure to Cigarette Smoke*]], table.cell(colspan: 2, align: horizon)[#set par(spacing: 0.5em); #align(center)[*Anemia*]], table.cell(rowspan: 2, align: horizon)[#set par(spacing: 0.5em); #align(center)[*Total*]], table.cell(rowspan: 2, align: horizon)[#set par(spacing: 0.5em); #align(center)[*Odds Ratio*]],
-  table.cell(align: horizon)[#set par(spacing: 0.5em); #align(center)[*Yes*]], table.cell(align: horizon)[#set par(spacing: 0.5em); #align(center)[*No*]],
-  [#set par(spacing: 0.5em); #align(center)[......................]], [#set par(spacing: 0.5em); .....................], [#set par(spacing: 0.5em); .....................], [#set par(spacing: 0.5em); .....................], table.cell(rowspan: 3, align: horizon)[#set par(spacing: 0.5em); #align(center)[4,04]],
-  [#set par(spacing: 0.5em); #align(center)[.....................]], [#set par(spacing: 0.5em); .....................], [#set par(spacing: 0.5em); .....................], [#set par(spacing: 0.5em); .....................],
-  [#set par(spacing: 0.5em); #align(center)[Total]], [#set par(spacing: 0.5em); .....................], [#set par(spacing: 0.5em); .....................], [#set par(spacing: 0.5em); .....................],
+  stroke: none,
+  table.cell(rowspan: 2, align: horizon, stroke: (top: 1pt, bottom: 1pt, left: 1pt, right: 1pt))[#set par(spacing: 0.5em); #align(center)[*Exposure to Cigarette Smoke*]], table.cell(colspan: 2, align: horizon, stroke: (top: 1pt, bottom: 1pt, left: 1pt, right: 1pt))[#set par(spacing: 0.5em); #align(center)[*Anemia*]], table.cell(rowspan: 2, align: horizon, stroke: (top: 1pt, bottom: 1pt, left: 1pt, right: 1pt))[#set par(spacing: 0.5em); #align(center)[*Total*]], table.cell(rowspan: 2, align: horizon, stroke: (top: 1pt, bottom: 1pt, left: 1pt, right: 1pt))[#set par(spacing: 0.5em); #align(center)[*Odds Ratio*]],
+  table.cell(align: horizon, stroke: (top: 1pt, bottom: 1pt, left: 1pt, right: 1pt))[#set par(spacing: 0.5em); #align(center)[*Yes*]], table.cell(align: horizon, stroke: (top: 1pt, bottom: 1pt, left: 1pt, right: 1pt))[#set par(spacing: 0.5em); #align(center)[*No*]],
+  table.cell(stroke: (top: 1pt, bottom: 1pt, left: 1pt, right: 1pt))[#set par(spacing: 0.5em); #align(center)[......................]], table.cell(stroke: (top: 1pt, bottom: 1pt, left: 1pt, right: 1pt))[#set par(spacing: 0.5em); .....................], table.cell(stroke: (top: 1pt, bottom: 1pt, left: 1pt, right: 1pt))[#set par(spacing: 0.5em); .....................], table.cell(stroke: (top: 1pt, bottom: 1pt, left: 1pt, right: 1pt))[#set par(spacing: 0.5em); .....................], table.cell(rowspan: 3, align: horizon, stroke: (top: 1pt, bottom: 1pt, left: 1pt, right: 1pt))[#set par(spacing: 0.5em); #align(center)[4,04]],
+  table.cell(stroke: (top: 1pt, bottom: 1pt, left: 1pt, right: 1pt))[#set par(spacing: 0.5em); #align(center)[.....................]], table.cell(stroke: (top: 1pt, bottom: 1pt, left: 1pt, right: 1pt))[#set par(spacing: 0.5em); .....................], table.cell(stroke: (top: 1pt, bottom: 1pt, left: 1pt, right: 1pt))[#set par(spacing: 0.5em); .....................], table.cell(stroke: (top: 1pt, bottom: 1pt, left: 1pt, right: 1pt))[#set par(spacing: 0.5em); .....................],
+  table.cell(stroke: (top: 1pt, bottom: 1pt, left: 1pt, right: 1pt))[#set par(spacing: 0.5em); #align(center)[Total]], table.cell(stroke: (top: 1pt, bottom: 1pt, left: 1pt, right: 1pt))[#set par(spacing: 0.5em); .....................], table.cell(stroke: (top: 1pt, bottom: 1pt, left: 1pt, right: 1pt))[#set par(spacing: 0.5em); .....................], table.cell(stroke: (top: 1pt, bottom: 1pt, left: 1pt, right: 1pt))[#set par(spacing: 0.5em); .....................],
 )
 
 #columns(2)[
@@ -119,12 +119,12 @@ Published online October, 4th 2019
 
 #table(
   columns: (19%, 18%, 21%, 17%, 24%),
-  stroke: 1pt,
-  table.cell(rowspan: 2, align: horizon)[#set par(spacing: 0.5em); #align(center)[*Environmental Factors*]], table.cell(colspan: 2, align: horizon)[#set par(spacing: 0.5em); #align(center)[*Tuberculosis in Children*]], table.cell(rowspan: 2, align: horizon)[#set par(spacing: 0.5em); #align(center)[*Total*]], table.cell(rowspan: 2, align: horizon)[#set par(spacing: 0.5em); #align(center)[*_p value_*]],
-  table.cell(align: horizon)[#set par(spacing: 0.5em); #align(center)[*Yes*]], table.cell(align: horizon)[#set par(spacing: 0.5em); #align(center)[*No*]],
-  [#set par(spacing: 0.5em); #align(center)[.....................]], [#set par(spacing: 0.5em); #align(center)[........................]], [#set par(spacing: 0.5em); ........................], [#set par(spacing: 0.5em); ........................], table.cell(rowspan: 3, align: horizon)[#set par(spacing: 0.5em); #align(center)[0,02]],
-  [#set par(spacing: 0.5em); #align(center)[......................]], [#set par(spacing: 0.5em); #align(center)[.......................]], [#set par(spacing: 0.5em); ........................], [#set par(spacing: 0.5em); ........................],
-  [#set par(spacing: 0.5em); #align(center)[Total]], [#set par(spacing: 0.5em); ........................], [#set par(spacing: 0.5em); ........................], [#set par(spacing: 0.5em); ........................],
+  stroke: none,
+  table.cell(rowspan: 2, align: horizon, stroke: (top: 1pt, bottom: 1pt, left: 1pt, right: 1pt))[#set par(spacing: 0.5em); #align(center)[*Environmental Factors*]], table.cell(colspan: 2, align: horizon, stroke: (top: 1pt, bottom: 1pt, left: 1pt, right: 1pt))[#set par(spacing: 0.5em); #align(center)[*Tuberculosis in Children*]], table.cell(rowspan: 2, align: horizon, stroke: (top: 1pt, bottom: 1pt, left: 1pt, right: 1pt))[#set par(spacing: 0.5em); #align(center)[*Total*]], table.cell(rowspan: 2, align: horizon, stroke: (top: 1pt, bottom: 1pt, left: 1pt, right: 1pt))[#set par(spacing: 0.5em); #align(center)[*_p value_*]],
+  table.cell(align: horizon, stroke: (top: 1pt, bottom: 1pt, left: 1pt, right: 1pt))[#set par(spacing: 0.5em); #align(center)[*Yes*]], table.cell(align: horizon, stroke: (top: 1pt, bottom: 1pt, left: 1pt, right: 1pt))[#set par(spacing: 0.5em); #align(center)[*No*]],
+  table.cell(stroke: (top: 1pt, bottom: 1pt, left: 1pt, right: 1pt))[#set par(spacing: 0.5em); #align(center)[.....................]], table.cell(stroke: (top: 1pt, bottom: 1pt, left: 1pt, right: 1pt))[#set par(spacing: 0.5em); #align(center)[........................]], table.cell(stroke: (top: 1pt, bottom: 1pt, left: 1pt, right: 1pt))[#set par(spacing: 0.5em); ........................], table.cell(stroke: (top: 1pt, bottom: 1pt, left: 1pt, right: 1pt))[#set par(spacing: 0.5em); ........................], table.cell(rowspan: 3, align: horizon, stroke: (top: 1pt, bottom: 1pt, left: 1pt, right: 1pt))[#set par(spacing: 0.5em); #align(center)[0,02]],
+  table.cell(stroke: (top: 1pt, bottom: 1pt, left: 1pt, right: 1pt))[#set par(spacing: 0.5em); #align(center)[......................]], table.cell(stroke: (top: 1pt, bottom: 1pt, left: 1pt, right: 1pt))[#set par(spacing: 0.5em); #align(center)[.......................]], table.cell(stroke: (top: 1pt, bottom: 1pt, left: 1pt, right: 1pt))[#set par(spacing: 0.5em); ........................], table.cell(stroke: (top: 1pt, bottom: 1pt, left: 1pt, right: 1pt))[#set par(spacing: 0.5em); ........................],
+  table.cell(stroke: (top: 1pt, bottom: 1pt, left: 1pt, right: 1pt))[#set par(spacing: 0.5em); #align(center)[Total]], table.cell(stroke: (top: 1pt, bottom: 1pt, left: 1pt, right: 1pt))[#set par(spacing: 0.5em); ........................], table.cell(stroke: (top: 1pt, bottom: 1pt, left: 1pt, right: 1pt))[#set par(spacing: 0.5em); ........................], table.cell(stroke: (top: 1pt, bottom: 1pt, left: 1pt, right: 1pt))[#set par(spacing: 0.5em); ........................],
 )
 
 #columns(2)[
