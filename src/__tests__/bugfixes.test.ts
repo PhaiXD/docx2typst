@@ -1098,8 +1098,8 @@ describe('Critical Bug Fixes Verification', () => {
       expect(result).toBe(
         '#table(\n' +
           '  columns: 1,\n' +
-          '  stroke: 1pt,\n' +
-          '  [#set par(spacing: 0.5em); #align(center)[*ABSTRACT*]\n\n#par(justify: true)[#h(1.06cm)The abstract text goes here.]],\n' +
+          '  stroke: none,\n' +
+          '  [#set par(spacing: 0.5em); #align(center)[*ABSTRACT*]\n\n#[#set par(justify: true);\n#h(1.06cm)The abstract text goes here.\n]],\n' +
           ')',
       );
     });
@@ -1134,7 +1134,7 @@ describe('Critical Bug Fixes Verification', () => {
 
       const typst = convertTableToTypst(doc.tables![0]);
       expect(typst).toBe(
-        '#table(\n  columns: 1,\n  stroke: 1pt,\n  table.cell(align: horizon)[#set par(spacing: 0.5em); #align(center)[*Anemia*]],\n)',
+        '#table(\n  columns: 1,\n  stroke: none,\n  table.cell(align: horizon)[#set par(spacing: 0.5em); #align(center)[*Anemia*]],\n)',
       );
     });
 });

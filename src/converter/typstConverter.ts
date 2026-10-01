@@ -70,7 +70,7 @@ function convertRunToTypst(run: TextRun, escape: boolean = true): string {
   if (run.pageBreak) {
     const rawText = run.text || '';
     if (rawText.trim().length === 0) {
-      return '#pagebreak()';
+      return '\n#colbreak()\n';
     }
     const text = escape ? escapeTypstText(rawText) : rawText;
     const match = text.match(/^(\s*)(.*?)(\s*)$/s);
@@ -91,7 +91,7 @@ function convertRunToTypst(run: TextRun, escape: boolean = true): string {
     if (run.color) {
       formatted = `#text(fill: rgb("${run.color}"))[${formatted}]`;
     }
-    return `#pagebreak()\n${leadingWs}${formatted}${trailingWs}`;
+    return `\n#colbreak()\n${leadingWs}${formatted}${trailingWs}`;
   }
 
   if (!run.text || run.text.length === 0) {
@@ -291,10 +291,10 @@ function convertParagraphToTypst(
     }
     let emptyOutput = '';
     if (para.pageBreakBefore) {
-      emptyOutput = '#pagebreak()';
+      emptyOutput = '#colbreak()';
     }
     if (para.sectionBreak?.pageBreak) {
-      emptyOutput = emptyOutput ? `${emptyOutput}\n#pagebreak()` : '#pagebreak()';
+      emptyOutput = emptyOutput ? `${emptyOutput}\n#colbreak()` : '#colbreak()';
     }
     return emptyOutput;
   }
@@ -354,7 +354,7 @@ function convertParagraphToTypst(
       } else if (para.align === 'right') {
         textContent = `#align(right)[${textContent}]`;
       } else if (para.align === 'justify') {
-        textContent = `#par(justify: true)[${textContent}]`;
+        textContent = `#[#set par(justify: true);\n${textContent}\n]`;
       }
     }
   }
@@ -380,10 +380,10 @@ function convertParagraphToTypst(
 
   if (!isCell) {
     if (para.pageBreakBefore) {
-      output = output.length > 0 ? `#pagebreak()\n${output}` : '#pagebreak()';
+      output = output.length > 0 ? `\n#colbreak()\n${output}` : '\n#colbreak()\n';
     }
     if (para.sectionBreak?.pageBreak) {
-      output = output.length > 0 ? `${output}\n#pagebreak()` : '#pagebreak()';
+      output = output.length > 0 ? `${output}\n#colbreak()\n` : '\n#colbreak()\n';
     }
   }
 
@@ -685,7 +685,7 @@ export function convertDocxToTypst(
         inPhase1 = false;
       } else if (item.type === 'paragraph') {
         const paraTypst = convertParagraphToTypst(item.paragraph, options);
-        if (paraTypst.trim().length > 0 || paraTypst.includes('#pagebreak') || (isBlank && consecutiveBlankCount === 1)) {
+        if (paraTypst.trim().length > 0 || paraTypst.includes('#colbreak') || (isBlank && consecutiveBlankCount === 1)) {
           content += paraTypst + '\n\n';
         }
       }
@@ -712,21 +712,6 @@ export function convertDocxToTypst(
       }
 
       let paraTypst = convertParagraphToTypst(para, options);
-
-      // Ensure pagebreaks happen OUTSIDE the column block!
-      if (paraTypst.startsWith('#pagebreak()\n\n')) {
-        flushColumns();
-        content += '#pagebreak()\n\n';
-        paraTypst = paraTypst.substring('#pagebreak()\n\n'.length);
-      } else if (paraTypst.startsWith('#pagebreak()\n')) {
-        flushColumns();
-        content += '#pagebreak()\n\n';
-        paraTypst = paraTypst.substring('#pagebreak()\n'.length);
-      } else if (paraTypst.startsWith('#pagebreak()')) {
-        flushColumns();
-        content += '#pagebreak()\n\n';
-        paraTypst = paraTypst.substring('#pagebreak()'.length);
-      }
 
       if (isTwoCol) {
         if (paraTypst.trim().length > 0 || (isBlank && consecutiveBlankCount === 1)) {
