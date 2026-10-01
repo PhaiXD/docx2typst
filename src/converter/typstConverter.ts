@@ -451,13 +451,20 @@ function convertCellToTypst(
       if (tableBorders) {
         return (tableBorders[side] || tableBorders[insideSide]) ? '1pt' : 'none';
       }
-      return '1pt';
+      return '1pt'; // default if nothing specified
     };
-    strokeParts.push(`top: ${getSide('top', 'insideH')}`);
-    strokeParts.push(`bottom: ${getSide('bottom', 'insideH')}`);
-    strokeParts.push(`left: ${getSide('left', 'insideV')}`);
-    strokeParts.push(`right: ${getSide('right', 'insideV')}`);
-    attrs.push(`stroke: (${strokeParts.join(', ')})`);
+    const t = getSide('top', 'insideH');
+    const b = getSide('bottom', 'insideH');
+    const l = getSide('left', 'insideV');
+    const r = getSide('right', 'insideV');
+    
+    if (t !== 'none' || b !== 'none' || l !== 'none' || r !== 'none') {
+      strokeParts.push(`top: ${t}`);
+      strokeParts.push(`bottom: ${b}`);
+      strokeParts.push(`left: ${l}`);
+      strokeParts.push(`right: ${r}`);
+      attrs.push(`stroke: (${strokeParts.join(', ')})`);
+    }
   }
 
   if (attrs.length > 0) {
@@ -505,21 +512,7 @@ export function convertTableToTypst(
   ];
 
   const borders = table.borders;
-  if (!borders) {
-    lines.push('  stroke: 1pt,');
-  } else {
-    const hasV = borders.left || borders.right || borders.insideV;
-    const hasH = borders.top || borders.bottom || borders.insideH;
-    if (hasV && hasH) {
-      lines.push('  stroke: 1pt,');
-    } else if (hasV && !hasH) {
-      lines.push('  stroke: (x: 1pt, y: none),');
-    } else if (!hasV && hasH) {
-      lines.push('  stroke: (x: none, y: 1pt),');
-    } else {
-      lines.push('  stroke: none,');
-    }
-  }
+  lines.push('  stroke: none,');
 
   for (const row of table.rows) {
     let slotsUsed = 0;
@@ -616,7 +609,7 @@ export function convertDocxToTypst(
         ];
 
   let content = '';
-  let phase = 1; // 1: Title area (1-col), 2: Body (2-col)
+  let inPhase1 = true; // phase 1 = title area before abstract table
   let columnBuffer: string[] = [];
 
   const flushColumns = () => {
@@ -626,13 +619,36 @@ export function convertDocxToTypst(
     }
   };
 
+  // Pre-scan: determine column mode for each item based on section breaks.
+  // In OOXML, a w:sectPr embedded in a paragraph's w:pPr marks the END of the section
+  // that the paragraph belongs to. The column count in that sectPr applies to the
+  // section from the previous sectPr up to (and including) the paragraph with sectPr.
+  const itemColumns: number[] = new Array(items.length).fill(2);
+  {
+    let prevBreakIdx = -1;
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      if (item.type === 'paragraph' && item.paragraph.sectionBreak) {
+        const cols = item.paragraph.sectionBreak.columnCount || 1;
+        for (let j = prevBreakIdx + 1; j <= i; j++) {
+          itemColumns[j] = cols;
+        }
+        prevBreakIdx = i;
+      }
+    }
+    // Items after the last sectionBreak paragraph belong to the final section.
+    // The final body-level sectPr typically has 2 cols for DISCUSSION/CONCLUSION.
+    for (let j = prevBreakIdx + 1; j < items.length; j++) {
+      itemColumns[j] = 2;
+    }
+  }
+
   let consecutiveBlankCount = 0;
 
   for (let i = 0; i < items.length; i++) {
     const item = items[i];
 
     let isBlank = false;
-    // Filter consecutive blank lines
     if (item.type === 'paragraph') {
       const para = item.paragraph;
       const hasImages = Array.isArray(para.images) && para.images.length > 0;
@@ -644,6 +660,12 @@ export function convertDocxToTypst(
         !isHeading &&
         !hasPageBreak &&
         (Boolean(para.isEmpty) || ((!para.text || para.text.trim().length === 0) && !hasImages));
+
+      // Skip blank sectionBreak paragraphs — they are DOCX section markers with no content
+      if (isBlank && para.sectionBreak && !para.sectionBreak.pageBreak) {
+        consecutiveBlankCount = 0;
+        continue;
+      }
 
       if (isBlank) {
         consecutiveBlankCount++;
@@ -657,73 +679,64 @@ export function convertDocxToTypst(
       consecutiveBlankCount = 0;
     }
 
-    if (phase === 1) {
+    if (inPhase1) {
       if (item.type === 'table') {
         content += convertTableToTypst(item.table, options) + '\n\n';
-        phase = 2; // Everything after the first table (Abstract) is in Phase 2
+        inPhase1 = false;
       } else if (item.type === 'paragraph') {
         const paraTypst = convertParagraphToTypst(item.paragraph, options);
         if (paraTypst.trim().length > 0 || paraTypst.includes('#pagebreak') || (isBlank && consecutiveBlankCount === 1)) {
           content += paraTypst + '\n\n';
         }
       }
-    } else {
-      let isFullWidth = false;
+      continue;
+    }
 
-      if (item.type === 'table') {
-        isFullWidth = true;
-      } else if (item.type === 'paragraph') {
-        const para = item.paragraph;
-        const text = (para.runs || []).map((r) => r.text || '').join('').trim();
-        const hasImages = Array.isArray(para.images) && para.images.length > 0;
+    // Phase 2: use section-break-aware column detection
+    const isTwoCol = itemColumns[i] === 2;
 
-        if (hasImages) {
-          isFullWidth = true;
-        } else if (text.startsWith('Table ')) {
-          // Look ahead for table
-          const nextItem = items[i + 1];
-          if (nextItem && nextItem.type === 'table') {
-            isFullWidth = true;
-          }
-        } else if (text.startsWith('Figure ')) {
-          // Look behind for image
-          const prevItem = items[i - 1];
-          if (prevItem && prevItem.type === 'paragraph') {
-            const prevPara = prevItem.paragraph;
-            if (Array.isArray(prevPara.images) && prevPara.images.length > 0) {
-              isFullWidth = true;
-            }
-          }
-        }
+    if (item.type === 'table') {
+      // Tables are always full-width
+      flushColumns();
+      content += convertTableToTypst(item.table, options) + '\n\n';
+    } else if (item.type === 'paragraph') {
+      const para = item.paragraph;
+      const hasImages = Array.isArray(para.images) && para.images.length > 0;
+
+      // Paragraphs with images are always full-width
+      if (hasImages) {
+        flushColumns();
+        const paraTypst = convertParagraphToTypst(para, options);
+        if (paraTypst.trim().length > 0) content += paraTypst + '\n\n';
+        continue;
       }
 
-      if (isFullWidth) {
+      let paraTypst = convertParagraphToTypst(para, options);
+
+      // Ensure pagebreaks happen OUTSIDE the column block!
+      if (paraTypst.startsWith('#pagebreak()\n\n')) {
         flushColumns();
-        if (item.type === 'table') {
-          content += convertTableToTypst(item.table, options) + '\n\n';
-        } else if (item.type === 'paragraph') {
-          content += convertParagraphToTypst(item.paragraph, options) + '\n\n';
-        }
-      } else if (item.type === 'paragraph') {
-        let paraTypst = convertParagraphToTypst(item.paragraph, options);
-        
-        // Ensure pagebreaks happen OUTSIDE the column block!
-        if (paraTypst.startsWith('#pagebreak()\n\n')) {
-          flushColumns();
-          content += '#pagebreak()\n\n';
-          paraTypst = paraTypst.substring('#pagebreak()\n\n'.length);
-        } else if (paraTypst.startsWith('#pagebreak()\n')) {
-          flushColumns();
-          content += '#pagebreak()\n\n';
-          paraTypst = paraTypst.substring('#pagebreak()\n'.length);
-        } else if (paraTypst.startsWith('#pagebreak()')) {
-          flushColumns();
-          content += '#pagebreak()\n\n';
-          paraTypst = paraTypst.substring('#pagebreak()'.length);
-        }
-        
+        content += '#pagebreak()\n\n';
+        paraTypst = paraTypst.substring('#pagebreak()\n\n'.length);
+      } else if (paraTypst.startsWith('#pagebreak()\n')) {
+        flushColumns();
+        content += '#pagebreak()\n\n';
+        paraTypst = paraTypst.substring('#pagebreak()\n'.length);
+      } else if (paraTypst.startsWith('#pagebreak()')) {
+        flushColumns();
+        content += '#pagebreak()\n\n';
+        paraTypst = paraTypst.substring('#pagebreak()'.length);
+      }
+
+      if (isTwoCol) {
         if (paraTypst.trim().length > 0 || (isBlank && consecutiveBlankCount === 1)) {
           columnBuffer.push(paraTypst);
+        }
+      } else {
+        // 1-col paragraph: flush columns first, then emit directly
+        flushColumns();
+        if (paraTypst.trim().length > 0 || (isBlank && consecutiveBlankCount === 1)) {
+          content += paraTypst + '\n\n';
         }
       }
     }

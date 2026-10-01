@@ -648,11 +648,14 @@ export function extractParagraph(
         sectPageBreak = true;
       }
 
-      if (columnCount > 1 || sectPageBreak) {
+      if (columnCount > 1 || sectPageBreak || isRecord(colsRaw)) {
         sectionBreak = {
           columnCount,
           ...(sectPageBreak ? { pageBreak: true } : {}),
         };
+      } else if (isRecord(sectPrRaw)) {
+        // Even a 1-col section break (no cols element) is meaningful as a boundary marker
+        sectionBreak = { columnCount: 1 };
       }
     }
   }

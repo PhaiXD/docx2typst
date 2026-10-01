@@ -89,68 +89,62 @@ Published online October, 4th 2019
   *RESULT (bold, space 1)*
   
   #par(justify: true)[#h(1.00cm)The results contain research output by describing authentic and valid findings and following the objectives and research methods The writing result is written with indented into five digits. *Examples of writing statistical results in table format are:*]
-  
-  
 ]
+
+
 
 #par(justify: true)[#pad(left: 1.25cm)[#h(-1.25cm)Table 1. Risk of Exposure to Cigarette Smoke Against Incidence of Anemia in Pregnant Women Year X in the Work Area of ​​Health Center Y]]
 
 #table(
   columns: (20%, 18%, 18%, 22%, 22%),
   stroke: 1pt,
-  table.cell(rowspan: 2, align: horizon, stroke: (top: 1pt, bottom: 1pt, left: 1pt, right: 1pt))[#set par(spacing: 0.5em); #align(center)[*Exposure to Cigarette Smoke*]], table.cell(colspan: 2, align: horizon, stroke: (top: 1pt, bottom: 1pt, left: 1pt, right: 1pt))[#set par(spacing: 0.5em); #align(center)[*Anemia*]], table.cell(rowspan: 2, align: horizon, stroke: (top: 1pt, bottom: 1pt, left: 1pt, right: 1pt))[#set par(spacing: 0.5em); #align(center)[*Total*]], table.cell(rowspan: 2, align: horizon, stroke: (top: 1pt, bottom: 1pt, left: 1pt, right: 1pt))[#set par(spacing: 0.5em); #align(center)[*Odds Ratio*]],
-  table.cell(align: horizon, stroke: (top: 1pt, bottom: 1pt, left: 1pt, right: 1pt))[#set par(spacing: 0.5em); #align(center)[*Yes*]], table.cell(align: horizon, stroke: (top: 1pt, bottom: 1pt, left: 1pt, right: 1pt))[#set par(spacing: 0.5em); #align(center)[*No*]],
-  table.cell(stroke: (top: 1pt, bottom: 1pt, left: 1pt, right: 1pt))[#set par(spacing: 0.5em); #align(center)[......................]], table.cell(stroke: (top: 1pt, bottom: 1pt, left: 1pt, right: 1pt))[#set par(spacing: 0.5em); .....................], table.cell(stroke: (top: 1pt, bottom: 1pt, left: 1pt, right: 1pt))[#set par(spacing: 0.5em); .....................], table.cell(stroke: (top: 1pt, bottom: 1pt, left: 1pt, right: 1pt))[#set par(spacing: 0.5em); .....................], table.cell(rowspan: 3, align: horizon, stroke: (top: 1pt, bottom: 1pt, left: 1pt, right: 1pt))[#set par(spacing: 0.5em); #align(center)[4,04]],
-  table.cell(stroke: (top: 1pt, bottom: 1pt, left: 1pt, right: 1pt))[#set par(spacing: 0.5em); #align(center)[.....................]], table.cell(stroke: (top: 1pt, bottom: 1pt, left: 1pt, right: 1pt))[#set par(spacing: 0.5em); .....................], table.cell(stroke: (top: 1pt, bottom: 1pt, left: 1pt, right: 1pt))[#set par(spacing: 0.5em); .....................], table.cell(stroke: (top: 1pt, bottom: 1pt, left: 1pt, right: 1pt))[#set par(spacing: 0.5em); .....................],
-  table.cell(stroke: (top: 1pt, bottom: 1pt, left: 1pt, right: 1pt))[#set par(spacing: 0.5em); #align(center)[Total]], table.cell(stroke: (top: 1pt, bottom: 1pt, left: 1pt, right: 1pt))[#set par(spacing: 0.5em); .....................], table.cell(stroke: (top: 1pt, bottom: 1pt, left: 1pt, right: 1pt))[#set par(spacing: 0.5em); .....................], table.cell(stroke: (top: 1pt, bottom: 1pt, left: 1pt, right: 1pt))[#set par(spacing: 0.5em); .....................],
+  table.cell(rowspan: 2, align: horizon)[#set par(spacing: 0.5em); #align(center)[*Exposure to Cigarette Smoke*]], table.cell(colspan: 2, align: horizon)[#set par(spacing: 0.5em); #align(center)[*Anemia*]], table.cell(rowspan: 2, align: horizon)[#set par(spacing: 0.5em); #align(center)[*Total*]], table.cell(rowspan: 2, align: horizon)[#set par(spacing: 0.5em); #align(center)[*Odds Ratio*]],
+  table.cell(align: horizon)[#set par(spacing: 0.5em); #align(center)[*Yes*]], table.cell(align: horizon)[#set par(spacing: 0.5em); #align(center)[*No*]],
+  [#set par(spacing: 0.5em); #align(center)[......................]], [#set par(spacing: 0.5em); .....................], [#set par(spacing: 0.5em); .....................], [#set par(spacing: 0.5em); .....................], table.cell(rowspan: 3, align: horizon)[#set par(spacing: 0.5em); #align(center)[4,04]],
+  [#set par(spacing: 0.5em); #align(center)[.....................]], [#set par(spacing: 0.5em); .....................], [#set par(spacing: 0.5em); .....................], [#set par(spacing: 0.5em); .....................],
+  [#set par(spacing: 0.5em); #align(center)[Total]], [#set par(spacing: 0.5em); .....................], [#set par(spacing: 0.5em); .....................], [#set par(spacing: 0.5em); .....................],
 )
 
 #columns(2)[
-  
-  
   #par(justify: true)[#h(1.00cm)Examples of explanation / narrative table is: The results showed a risk of]
   
   
   
   #par(justify: true)[exposure to cigarette smoke to the incidence of anemia in pregnant women by 4.04 times because OR = 4.09; 95% CI (1.07 \<OR \<16.26).]
-  
-  
 ]
+
+
 
 #par(justify: true)[#pad(left: 1.25cm)[#h(-1.25cm)Table 2. Relationship between Environmental Factors and the Occurrence of Tuberculosis in Year X Children in District Y]]
 
 #table(
   columns: (19%, 18%, 21%, 17%, 24%),
   stroke: 1pt,
-  table.cell(rowspan: 2, align: horizon, stroke: (top: 1pt, bottom: 1pt, left: 1pt, right: 1pt))[#set par(spacing: 0.5em); #align(center)[*Environmental Factors*]], table.cell(colspan: 2, align: horizon, stroke: (top: 1pt, bottom: 1pt, left: 1pt, right: 1pt))[#set par(spacing: 0.5em); #align(center)[*Tuberculosis in Children*]], table.cell(rowspan: 2, align: horizon, stroke: (top: 1pt, bottom: 1pt, left: 1pt, right: 1pt))[#set par(spacing: 0.5em); #align(center)[*Total*]], table.cell(rowspan: 2, align: horizon, stroke: (top: 1pt, bottom: 1pt, left: 1pt, right: 1pt))[#set par(spacing: 0.5em); #align(center)[*_p value_*]],
-  table.cell(align: horizon, stroke: (top: 1pt, bottom: 1pt, left: 1pt, right: 1pt))[#set par(spacing: 0.5em); #align(center)[*Yes*]], table.cell(align: horizon, stroke: (top: 1pt, bottom: 1pt, left: 1pt, right: 1pt))[#set par(spacing: 0.5em); #align(center)[*No*]],
-  table.cell(stroke: (top: 1pt, bottom: 1pt, left: 1pt, right: 1pt))[#set par(spacing: 0.5em); #align(center)[.....................]], table.cell(stroke: (top: 1pt, bottom: 1pt, left: 1pt, right: 1pt))[#set par(spacing: 0.5em); #align(center)[........................]], table.cell(stroke: (top: 1pt, bottom: 1pt, left: 1pt, right: 1pt))[#set par(spacing: 0.5em); ........................], table.cell(stroke: (top: 1pt, bottom: 1pt, left: 1pt, right: 1pt))[#set par(spacing: 0.5em); ........................], table.cell(rowspan: 3, align: horizon, stroke: (top: 1pt, bottom: 1pt, left: 1pt, right: 1pt))[#set par(spacing: 0.5em); #align(center)[0,02]],
-  table.cell(stroke: (top: 1pt, bottom: 1pt, left: 1pt, right: 1pt))[#set par(spacing: 0.5em); #align(center)[......................]], table.cell(stroke: (top: 1pt, bottom: 1pt, left: 1pt, right: 1pt))[#set par(spacing: 0.5em); #align(center)[.......................]], table.cell(stroke: (top: 1pt, bottom: 1pt, left: 1pt, right: 1pt))[#set par(spacing: 0.5em); ........................], table.cell(stroke: (top: 1pt, bottom: 1pt, left: 1pt, right: 1pt))[#set par(spacing: 0.5em); ........................],
-  table.cell(stroke: (top: 1pt, bottom: 1pt, left: 1pt, right: 1pt))[#set par(spacing: 0.5em); #align(center)[Total]], table.cell(stroke: (top: 1pt, bottom: 1pt, left: 1pt, right: 1pt))[#set par(spacing: 0.5em); ........................], table.cell(stroke: (top: 1pt, bottom: 1pt, left: 1pt, right: 1pt))[#set par(spacing: 0.5em); ........................], table.cell(stroke: (top: 1pt, bottom: 1pt, left: 1pt, right: 1pt))[#set par(spacing: 0.5em); ........................],
+  table.cell(rowspan: 2, align: horizon)[#set par(spacing: 0.5em); #align(center)[*Environmental Factors*]], table.cell(colspan: 2, align: horizon)[#set par(spacing: 0.5em); #align(center)[*Tuberculosis in Children*]], table.cell(rowspan: 2, align: horizon)[#set par(spacing: 0.5em); #align(center)[*Total*]], table.cell(rowspan: 2, align: horizon)[#set par(spacing: 0.5em); #align(center)[*_p value_*]],
+  table.cell(align: horizon)[#set par(spacing: 0.5em); #align(center)[*Yes*]], table.cell(align: horizon)[#set par(spacing: 0.5em); #align(center)[*No*]],
+  [#set par(spacing: 0.5em); #align(center)[.....................]], [#set par(spacing: 0.5em); #align(center)[........................]], [#set par(spacing: 0.5em); ........................], [#set par(spacing: 0.5em); ........................], table.cell(rowspan: 3, align: horizon)[#set par(spacing: 0.5em); #align(center)[0,02]],
+  [#set par(spacing: 0.5em); #align(center)[......................]], [#set par(spacing: 0.5em); #align(center)[.......................]], [#set par(spacing: 0.5em); ........................], [#set par(spacing: 0.5em); ........................],
+  [#set par(spacing: 0.5em); #align(center)[Total]], [#set par(spacing: 0.5em); ........................], [#set par(spacing: 0.5em); ........................], [#set par(spacing: 0.5em); ........................],
 )
 
 #columns(2)[
-  
-  
   #par(justify: true)[#h(1.25cm)Example explanation / narrative table is: The results showed an association of environmental factors with the incidence of tuberculosis in children.]
   
   #par(justify: true)[#h(1.25cm)The descriptions or table titles are placed on the table. Each table must be numbered (such as: "Table 1"). The table is typed in 1 space with the letter size 11 pt and is numbered according to the appearance in the text. The table title is short and complete.]
   
   #par(justify: true)[The table may not be clipped and must be made into one page. However, if it has to be continued on the next sheet, the table title will be returned and the information "cont’". Table writing cannot precede the narration. Table Title uses Capitalize Each Word (except the lowercase conjunctions).]
-  
-  
 ]
+
+
 
 #par(justify: true)[*Then, the sample results in the form of figure are:*]
 #image("images/image1.png", width: 98%)
 
 #par(justify: true)[#pad(left: 1.00cm)[Figure 1. Risk Pathway Kejadian Flu Burung]]
 
-#columns(2)[
-  
-  
-  #par(justify: true)[#h(1.25cm)The description or title of the image is placed under the picture. Each picture must be numbered (such as: "Figure 1"). The title of the image is made brief and complete. Images must not be cropped and must be made into one page and center position. Then, the image resolution must be high so that the image does not break. Table Title uses Capitalize Each Word (except the lowercase conjunctions). If the image is from a secondary data source, then the source is written below the image. Like the example below:]
-]
+
+
+#par(justify: true)[#h(1.25cm)The description or title of the image is placed under the picture. Each picture must be numbered (such as: "Figure 1"). The title of the image is made brief and complete. Images must not be cropped and must be made into one page and center position. Then, the image resolution must be high so that the image does not break. Table Title uses Capitalize Each Word (except the lowercase conjunctions). If the image is from a secondary data source, then the source is written below the image. Like the example below:]
 
 #image("images/image2.png", width: 79%)
 

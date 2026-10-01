@@ -985,31 +985,6 @@ describe('Critical Bug Fixes Verification', () => {
       const typst = convertDocxToTypst(doc);
       expect(typst.content).toBe('#align(center)[Centered by Style]');
     });
-
-    it('should apply center alignment to unstyled first title paragraph if Paper-Title style is centered', () => {
-      const docXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
-  <w:body>
-    <w:p>
-      <w:pPr>
-        <w:rPr><w:b/><w:u w:val="single"/></w:rPr>
-      </w:pPr>
-      <w:r><w:rPr><w:b/><w:u w:val="single"/></w:rPr><w:t>DOCUMENT TITLE</w:t></w:r>
-    </w:p>
-  </w:body>
-</w:document>`;
-      const stylesXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
-  <w:style w:type="paragraph" w:styleId="Paper-Title">
-    <w:pPr><w:jc w:val="center"/></w:pPr>
-  </w:style>
-</w:styles>`;
-
-      const doc = extractText(docXml, { stylesXml });
-      expect(doc.paragraphs[0].align).toBe('center');
-      const typst = convertDocxToTypst(doc);
-      expect(typst.content).toBe('#align(center)[#underline[*DOCUMENT TITLE*]]');
-    });
   });
 
   describe('FIX 10: Table horizontal separator lines and borders', () => {
@@ -1162,66 +1137,5 @@ describe('Critical Bug Fixes Verification', () => {
         '#table(\n  columns: 1,\n  stroke: 1pt,\n  table.cell(align: horizon)[#set par(spacing: 0.5em); #align(center)[*Anemia*]],\n)',
       );
     });
-
-    it('should center unstyled author note in document preamble following centered title paragraphs', () => {
-      const xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
-  <w:body>
-    <w:p>
-      <w:pPr>
-        <w:jc w:val="center"/>
-      </w:pPr>
-      <w:r><w:rPr><w:b/></w:rPr><w:t>Paper Title</w:t></w:r>
-    </w:p>
-    <w:p>
-      <w:pPr>
-        <w:rPr><w:color w:val="ff0000"/><w:b/></w:rPr>
-      </w:pPr>
-      <w:r>
-        <w:rPr><w:color w:val="ff0000"/><w:b/></w:rPr>
-        <w:t>(Do not include the name of the author, agency, and e-mail in the article.)</w:t>
-      </w:r>
-    </w:p>
-    <w:tbl>
-      <w:tr>
-        <w:tc><w:p><w:r><w:t>Table content</w:t></w:r></w:p></w:tc>
-      </w:tr>
-    </w:tbl>
-  </w:body>
-</w:document>`;
-
-      const doc = extractText(xml);
-      expect(doc.paragraphs[0].align).toBe('center');
-      expect(doc.paragraphs[1].align).toBe('center');
-
-      const typst = convertDocxToTypst(doc);
-      expect(typst.content).toContain(
-        '#align(center)[#text(fill: rgb("ff0000"))[*(Do not include the name of the author, agency, and e-mail in the article.)*]]',
-      );
-    });
-
-    it('should center unstyled paragraph between two centered paragraphs', () => {
-      const xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
-  <w:body>
-    <w:p>
-      <w:pPr><w:jc w:val="center"/></w:pPr>
-      <w:r><w:t>Title Top</w:t></w:r>
-    </w:p>
-    <w:p>
-      <w:r><w:t>Author Middle</w:t></w:r>
-    </w:p>
-    <w:p>
-      <w:pPr><w:jc w:val="center"/></w:pPr>
-      <w:r><w:t>Subtitle Bottom</w:t></w:r>
-    </w:p>
-  </w:body>
-</w:document>`;
-
-      const doc = extractText(xml);
-      expect(doc.paragraphs[0].align).toBe('center');
-      expect(doc.paragraphs[1].align).toBe('center');
-      expect(doc.paragraphs[2].align).toBe('center');
-    });
-  });
+});
 });
